@@ -1,22 +1,25 @@
-from deepsvg.config import _Config
-from deepsvg.difflib.tensor import SVGTensor
-from deepsvg.svglib.svg import SVG
-from deepsvg.svglib.geom import Point
-
 import math
-import torch
-import torch.utils.data
-import random
-from typing import List, Union
-import pandas as pd
 import os
 import pickle
+import random
+from typing import List, Union
+
+import pandas as pd
+import torch
+import torch.utils.data
+from sklearn.model_selection import train_test_split
+
+from deepsvg.config import _Config
+from deepsvg.difflib.tensor import SVGTensor
+from deepsvg.svglib.geom import Point
+from deepsvg.svglib.svg import SVG
+
 Num = Union[int, float]
 
 
 class SVGTensorDataset(torch.utils.data.Dataset):
-    def __init__(self, data_dir, meta_filepath, model_args, max_num_groups, max_seq_len, max_total_len=None,
-                 filter_uni=None, filter_platform=None, filter_category=None, train_ratio=1.0, df=None, PAD_VAL=-1):
+    def __init__(self, df, data_dir, model_args, max_num_groups, max_seq_len, max_total_len=None, pad_val=-1):
+        self.df = df
         self.data_dir = data_dir
 
         self.MAX_NUM_GROUPS = max_num_groups
@@ -26,28 +29,9 @@ class SVGTensorDataset(torch.utils.data.Dataset):
         if max_total_len is None:
             self.MAX_TOTAL_LEN = max_num_groups * max_seq_len
 
-        if df is None:
-            df = pd.read_csv(meta_filepath)
-
-        if len(df) > 0:
-            if filter_uni is not None:
-                df = df[df.uni.isin(filter_uni)]
-
-            if filter_platform is not None:
-                df = df[df.platform.isin(filter_platform)]
-
-            if filter_category is not None:
-                df = df[df.category.isin(filter_category)]
-
-            df = df[(df.nb_groups <= max_num_groups) & (df.max_len_group <= max_seq_len)]
-            if max_total_len is not None:
-                df = df[df.total_len <= max_total_len]
-
-        self.df = df.sample(frac=train_ratio) if train_ratio < 1.0 else df
-
         self.model_args = model_args
 
-        self.PAD_VAL = PAD_VAL
+        self.PAD_VAL = pad_val
 
         self.nb_augmentations = len(self._load_tensor(self.idx_to_id(0))[0])
 
@@ -146,7 +130,7 @@ class SVGTensorDataset(torch.utils.data.Dataset):
             return svg.numericalize(256)
         return svg
 
-    def get(self, idx=0, model_args=None, random_aug=True, id=None, svg: SVG=None):
+    def get(self, idx=0, model_args=None, random_aug=True, id=None, svg: SVG = None):
         if id is None:
             idx = idx % len(self.df)
             id = self.idx_to_id(idx)
@@ -227,7 +211,33 @@ class SVGFinetuneDataset(torch.utils.data.Dataset):
             return self.original_dataset.random_icon()
 
 
-def load_dataset(cfg: _Config):
-    dataset = SVGTensorDataset(cfg.data_dir, cfg.meta_filepath, cfg.model_args, cfg.max_num_groups, cfg.max_seq_len, cfg.max_total_len,
-                               cfg.filter_uni, cfg.filter_platform, cfg.filter_category, cfg.train_ratio)
-    return dataset
+def load_dataset(cfg: _Config, _seed=72):
+    df = pd.read_csv(cfg.meta_filepath)
+
+    if len(df) > 0:
+        if cfg.filter_uni is not None:
+            df = df[df.uni.isin(cfg.filter_uni)]
+
+        if cfg.filter_platform is not None:
+            df = df[df.platform.isin(cfg.filter_platform)]
+
+        if cfg.filter_category is not None:
+            df = df[df.category.isin(cfg.filter_category)]
+
+        df = df[(df.nb_groups <= cfg.max_num_groups) & (df.max_len_group <= cfg.max_seq_len)]
+        if cfg.max_total_len is not None:
+            df = df[df.total_len <= cfg.max_total_len]
+
+    train_df, valid_df = train_test_split(df, train_size=cfg.train_ratio, random_state=_seed)
+    train_dataset = SVGTensorDataset(train_df, cfg.data_dir, cfg.model_args,
+                                     cfg.max_num_groups, cfg.max_seq_len, cfg.max_total_len)
+    valid_dataset = SVGTensorDataset(valid_df, cfg.data_dir, cfg.model_args,
+                                     cfg.max_num_groups, cfg.max_seq_len, cfg.max_total_len)
+
+    print(f"Number of train SVGs: {len(train_df)}")
+    print(f"First SVG in train:"
+          f"{train_df.iloc[0]['id']} - {train_df.iloc[0]['category']} - {train_df.iloc[0]['subcategory']}")
+    print(f"Number of test SVGs: {len(valid_df)}")
+    print(f"First SVG in train:"
+          f"{valid_df.iloc[0]['id']} - {valid_df.iloc[0]['category']} - {valid_df.iloc[0]['subcategory']}")
+    return train_dataset, valid_dataset

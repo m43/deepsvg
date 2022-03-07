@@ -1,16 +1,18 @@
-from deepsvg.config import _Config
-from deepsvg.model.model import SVGTransformer
-from deepsvg.model.loss import SVGLoss
-from deepsvg.model.config import *
-from deepsvg.svglib.svg import SVG
-from deepsvg.difflib.tensor import SVGTensor
-from deepsvg.svglib.utils import make_grid
-from deepsvg.svglib.geom import Bbox
-from deepsvg.utils.utils import batchify, linear
-
-import torchvision.transforms.functional as TF
-import torch.optim.lr_scheduler as lr_scheduler
+import os
 import random
+
+import torch.optim.lr_scheduler as lr_scheduler
+import torchvision.transforms.functional as TF
+from torchvision.utils import save_image
+
+from deepsvg.config import _Config
+from deepsvg.model.config import *
+from deepsvg.model.loss import SVGLoss
+from deepsvg.model.model import SVGTransformer
+from deepsvg.svglib.geom import Bbox
+from deepsvg.svglib.svg import SVG
+from deepsvg.svglib.utils import make_grid
+from deepsvg.utils.utils import batchify, linear
 
 
 class ModelConfig(Hierarchical):
@@ -25,6 +27,7 @@ class Config(_Config):
     """
     Overriding default training config.
     """
+
     def __init__(self, num_gpus=1):
         super().__init__(num_gpus=num_gpus)
 
@@ -35,7 +38,7 @@ class Config(_Config):
         # Dataset
         self.filter_category = None
 
-        self.train_ratio = 1.0
+        self.train_ratio = 0.9
 
         self.max_num_groups = 8
         self.max_total_len = 50
@@ -76,11 +79,11 @@ class Config(_Config):
         train_vars.x_inputs_train = [dataloader.dataset.get(idx, [*self.model_args, "tensor_grouped"])
                                      for idx in random.sample(range(len(dataloader.dataset)), k=10)]
 
-    def visualize(self, model, output, train_vars, step, epoch, summary_writer, visualization_dir):
+    def visualize(self, model, output, vars, step, epoch, summary_writer, visualization_dir, split="train"):
         device = next(model.parameters()).device
-        
+
         # Reconstruction
-        for i, data in enumerate(train_vars.x_inputs_train):
+        for i, data in enumerate(vars.x_inputs_train):
             model_args = batchify((data[key] for key in self.model_args), device)
             commands_y, args_y = model.module.greedy_sample(*model_args)
             tensor_pred = SVGTensor.from_cmd_args(commands_y[0].cpu(), args_y[0].cpu())
@@ -93,5 +96,6 @@ class Config(_Config):
             tensor_target = data["tensor_grouped"][0].copy().drop_sos().unpad()
             svg_path_gt = SVG.from_tensor(tensor_target.data, viewbox=Bbox(256)).normalize().split_paths().set_color("random")
 
-            img = make_grid([svg_path_sample, svg_path_gt]).draw(do_display=False, return_png=True, fill=False, with_points=False)
-            summary_writer.add_image(f"reconstructions_train/{i}", TF.to_tensor(img), step)
+            file_path = os.path.join(visualization_dir, f"{split}_reconstructions__i={i}_step={step:06d}.png")
+            img = make_grid([svg_path_sample, svg_path_gt]).draw(file_path=file_path, do_display=False, return_png=True, fill=False, with_points=False)
+            summary_writer.add_image(f"reconstructions_{split}/{i}", TF.to_tensor(img), step)

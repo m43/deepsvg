@@ -28,7 +28,7 @@ class _Config:
 
 
         # Dataset
-        self.train_ratio = 1.0                                #
+        self.train_ratio = 0.7                                #
         self.nb_augmentations = 1                             #
 
         self.max_num_groups = 15                              #
@@ -48,7 +48,8 @@ class _Config:
         self.ckpt_every = 1000                                #
 
         self.stats_to_print = {
-            "train": ["lr", "time"]
+            "train": ["lr", "time"],
+            "valid": [],
         }
 
         self.model_args = []                                  #

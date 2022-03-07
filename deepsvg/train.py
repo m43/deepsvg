@@ -1,18 +1,18 @@
-from deepsvg.config import _Config
-from deepsvg import utils
-from deepsvg.utils import Stats, TrainVars, Timer
-import os
-from tensorboardX import SummaryWriter
-import torch.nn as nn
-import torch
-from datetime import datetime
-from torch.utils.data import DataLoader
 import argparse
 import importlib
+import os
 
+import torch
+import torch.nn as nn
+import tqdm
+from tensorboardX import SummaryWriter
+from torch.utils.data import DataLoader
 
-# Reproducibility
-utils.set_seed(42)
+from deepsvg import utils
+from deepsvg.config import _Config
+from deepsvg.difflib.loss import chamfer_loss
+from deepsvg.utils import Stats, TrainVars, Timer
+from deepsvg.utils.utils import batchify
 
 
 def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=False, resume=False):
@@ -23,36 +23,42 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
 
     print("Loading dataset")
     dataset_load_function = importlib.import_module(cfg.dataloader_module).load_dataset
-    dataset = dataset_load_function(cfg)
-    dataloader = DataLoader(dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
-                            num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
-    model = cfg.make_model().to(device)
+    train_dataset, test_dataset = dataset_load_function(cfg)
+    train_dataloader = DataLoader(train_dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
+                                  num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
+    valid_dataloader = DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
+                                  num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
 
+    model = cfg.make_model().to(device)
     if cfg.pretrained_path is not None:
         print(f"Loading pretrained model {cfg.pretrained_path}")
-        utils.load_model(cfg.pretrained_path, model)
+        utils.load_model(cfg.pretrained_path, model, device)
 
-    stats = Stats(num_steps=cfg.num_steps, num_epochs=cfg.num_epochs, steps_per_epoch=len(dataloader),
+    stats = Stats(num_steps=cfg.num_steps, num_epochs=cfg.num_epochs, steps_per_epoch=len(train_dataloader),
                   stats_to_print=cfg.stats_to_print)
     train_vars = TrainVars()
+    valid_vars = TrainVars()
     timer = Timer()
 
     stats.num_parameters = utils.count_parameters(model)
     print(f"#Parameters: {stats.num_parameters:,}")
 
     # Summary Writer
-    current_time = datetime.now().strftime("%b%d_%H-%M-%S")
-    experiment_identifier = f"{model_name}_{experiment_name}_{current_time}"
+    current_time = utils.get_str_formatted_time()
+    experiment_identifier = f"{model_name}__{experiment_name}__{current_time}"
 
-    summary_writer = SummaryWriter(os.path.join(log_dir, "tensorboard", "debug" if debug else "full", experiment_identifier))
+    summary_writer = SummaryWriter(
+        os.path.join(log_dir, "tensorboard", "debug" if debug else "full", experiment_identifier))
     checkpoint_dir = os.path.join(log_dir, "models", model_name, experiment_name)
     visualization_dir = os.path.join(log_dir, "visualization", model_name, experiment_name)
+    utils.ensure_dir(visualization_dir)
 
-    cfg.set_train_vars(train_vars, dataloader)
+    cfg.set_train_vars(train_vars, train_dataloader)
+    cfg.set_train_vars(valid_vars, valid_dataloader)
 
     # Optimizer, lr & warmup schedulers
     optimizers = cfg.make_optimizers(model)
-    scheduler_lrs = cfg.make_schedulers(optimizers, epoch_size=len(dataloader))
+    scheduler_lrs = cfg.make_schedulers(optimizers, epoch_size=len(train_dataloader))
     scheduler_warmups = cfg.make_warmup_schedulers(optimizers, scheduler_lrs)
 
     loss_fns = [l.to(device) for l in cfg.make_losses()]
@@ -65,8 +71,9 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
         stats.num_steps = cfg.num_epochs * len(dataloader)
     else:
         # Run a single forward pass on the single-device model for initialization of some modules
-        single_foward_dataloader = DataLoader(dataset, batch_size=cfg.batch_size // cfg.num_gpus, shuffle=True, drop_last=True,
-                                      num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
+        single_foward_dataloader = DataLoader(train_dataset, batch_size=cfg.batch_size // cfg.num_gpus, shuffle=True,
+                                              drop_last=True,
+                                              num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
         data = next(iter(single_foward_dataloader))
         model_args, params_dict = [data[arg].to(device) for arg in cfg.model_args], cfg.get_params(0, 0)
         model(*model_args, params=params_dict)
@@ -77,8 +84,8 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
     for epoch in epoch_range:
         print(f"Epoch {epoch+1}")
 
-        for n_iter, data in enumerate(dataloader):
-            step = n_iter + epoch * len(dataloader)
+        for n_iter, data in enumerate(train_dataloader):
+            step = n_iter + epoch * len(train_dataloader)
 
             if cfg.num_steps is not None and step > cfg.num_steps:
                 return
@@ -141,8 +148,10 @@ if __name__ == "__main__":
     parser.add_argument("--log-dir", type=str, default="./logs")
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--resume", action="store_true", default=False)
+    parser.add_argument("--seed", type=int, default=72)
 
     args = parser.parse_args()
+    utils.set_seed(args.seed)
 
     cfg = importlib.import_module(args.config_module).Config()
     model_name, experiment_name = args.config_module.split(".")[-2:]

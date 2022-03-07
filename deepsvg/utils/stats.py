@@ -46,7 +46,7 @@ class Stats:
             self.num_steps = num_epochs * steps_per_epoch
 
         self.stats = {
-            "train": defaultdict(SmoothedValue),
+            k: defaultdict(SmoothedValue) for k in stats_to_print.keys()
         }
         self.stats_to_print = {k: set(v) for k, v in stats_to_print.items()}
 
