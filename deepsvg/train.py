@@ -17,6 +17,7 @@ from deepsvg.utils.utils import batchify
 
 def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=False, resume=False):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device}")
 
     print("Parameters")
     cfg.print_params()
@@ -64,11 +65,12 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
     loss_fns = [l.to(device) for l in cfg.make_losses()]
 
     if resume:
-        ckpt_exists = utils.load_ckpt_list(checkpoint_dir, model, None, optimizers, scheduler_lrs, scheduler_warmups, stats, train_vars)
+        ckpt_exists = utils.load_ckpt_list(checkpoint_dir, model, None, optimizers, scheduler_lrs, scheduler_warmups,
+                                           stats, train_vars)
 
     if resume and ckpt_exists:
-        print(f"Resuming model at epoch {stats.epoch+1}")
-        stats.num_steps = cfg.num_epochs * len(dataloader)
+        print(f"Resuming model at epoch {stats.epoch + 1}")
+        stats.num_steps = cfg.num_epochs * len(train_dataloader)
     else:
         # Run a single forward pass on the single-device model for initialization of some modules
         single_foward_dataloader = DataLoader(train_dataset, batch_size=cfg.batch_size // cfg.num_gpus, shuffle=True,
@@ -80,9 +82,12 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
 
     model = nn.DataParallel(model)
 
+    evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid",
+             stats, 0, 0, summary_writer, visualization_dir)
+
     epoch_range = utils.infinite_range(stats.epoch) if cfg.num_epochs is None else range(stats.epoch, cfg.num_epochs)
     for epoch in epoch_range:
-        print(f"Epoch {epoch+1}")
+        print(f"Epoch {epoch + 1}")
 
         for n_iter, data in enumerate(train_dataloader):
             step = n_iter + epoch * len(train_dataloader)
@@ -95,7 +100,8 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
             labels = data["label"].to(device) if "label" in data else None
             params_dict, weights_dict = cfg.get_params(step, epoch), cfg.get_weights(step, epoch)
 
-            for i, (loss_fn, optimizer, scheduler_lr, scheduler_warmup, optimizer_start) in enumerate(zip(loss_fns, optimizers, scheduler_lrs, scheduler_warmups, cfg.optimizer_starts), 1):
+            for i, (loss_fn, optimizer, scheduler_lr, scheduler_warmup, optimizer_start) in enumerate(
+                    zip(loss_fns, optimizers, scheduler_lrs, scheduler_warmups, cfg.optimizer_starts), 1):
                 optimizer.zero_grad()
 
                 output = model(*model_args, params=params_dict)
@@ -139,7 +145,42 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
                 timer.reset()
 
             if not debug and step % cfg.ckpt_every == 0 and step > 0:
-                utils.save_ckpt_list(checkpoint_dir, model, cfg, optimizers, scheduler_lrs, scheduler_warmups, stats, train_vars)
+                utils.save_ckpt_list(checkpoint_dir, model, cfg, optimizers, scheduler_lrs, scheduler_warmups, stats,
+                                     train_vars)
+
+        # Evaluate on the valid split after each epoch
+        evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid",
+                 stats, epoch, step, summary_writer, visualization_dir)
+
+
+def evaluate(cfg, model, device, loss_fns, vars, dataloader, split, stats, epoch, step, summary_writer,
+             visualization_dir):
+    print(f"Evaluate on: {split}")
+    timer = Timer()
+    model.eval()
+    with torch.no_grad():
+        for data in tqdm.tqdm(dataloader):
+
+            model_args = [data[arg].to(device) for arg in cfg.model_args]
+            labels = data["label"].to(device) if "label" in data else None
+            params_dict, weights_dict = cfg.get_params(step, epoch), cfg.get_weights(step, epoch)
+
+            for i, loss_fn in enumerate(loss_fns, 1):
+                output = model(*model_args, params=params_dict)
+                loss_dict = loss_fn(output, labels, weights=weights_dict)
+                stats.update_stats_to_print(split, loss_dict.keys())
+                stats.update(split, step, epoch, {**loss_dict})
+
+    stats.update(split, step, epoch, {
+        **weights_dict,
+        "time": timer.get_elapsed_time()
+    })
+
+    print(stats.get_summary(split))
+    stats.write_tensorboard(summary_writer, split)
+    summary_writer.flush()
+    output = None
+    cfg.visualize(model, output, vars, step, epoch, summary_writer, visualization_dir, split)
 
 
 if __name__ == "__main__":
