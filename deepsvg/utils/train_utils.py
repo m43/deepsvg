@@ -1,4 +1,7 @@
+import pathlib
 import shutil
+from datetime import datetime
+
 import torch
 import torch.nn as nn
 import os
@@ -144,8 +147,8 @@ def load_ckpt_list(checkpoint_dir, model, cfg=None, optimizers=None, scheduler_l
     return True
 
 
-def load_model(checkpoint_path, model):
-    state = torch.load(checkpoint_path)
+def load_model(checkpoint_path, model, device=None):
+    state = torch.load(checkpoint_path, map_location=device)
 
     if is_multi_gpu(model):
         model = model.module
@@ -221,7 +224,7 @@ def pad_sequence(sequences, batch_first=False, padding_value=0, max_len=None):
     return out_tensor
 
 
-def set_seed(_seed=42):
+def set_seed(_seed=72):
     random.seed(_seed)
     np.random.seed(_seed)
     torch.manual_seed(_seed)
@@ -234,3 +237,22 @@ def infinite_range(start_idx=0):
     while True:
         yield start_idx
         start_idx += 1
+
+
+class Object(object):
+    pass
+
+
+def get_str_formatted_time() -> str:
+    return datetime.now().strftime('%Y.%m.%d_%H.%M.%S')
+
+
+def ensure_dir(dirname):
+    dirname = pathlib.Path(dirname)
+    if not dirname.is_dir():
+        dirname.mkdir(parents=True, exist_ok=False)
+
+
+def ensure_dirs(dirs):
+    for dir_ in dirs:
+        ensure_dir(dir_)
