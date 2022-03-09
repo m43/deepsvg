@@ -1,4 +1,5 @@
 import numpy as np
+
 from .utils import *
 
 
@@ -29,7 +30,7 @@ def svg_emd_loss(p_pred, p_target,
     p_target = make_clockwise(p_target)
 
     # Compute length distribution
-    distr_pred =  torch.linspace(0., 1., n).to(p_pred.device)
+    distr_pred = torch.linspace(0., 1., n).to(p_pred.device)
     distr_target = get_length_distribution(p_target, normalize=True)
     d = torch.cdist(distr_pred.unsqueeze(-1), distr_target.unsqueeze(-1))
     matching = d.argmin(dim=-1)

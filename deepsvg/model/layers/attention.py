@@ -1,10 +1,10 @@
 import torch
 from torch.nn import Linear
-from torch.nn.init import xavier_uniform_
 from torch.nn.init import constant_
 from torch.nn.init import xavier_normal_
-from torch.nn.parameter import Parameter
+from torch.nn.init import xavier_uniform_
 from torch.nn.modules.module import Module
+from torch.nn.parameter import Parameter
 
 from .functional import multi_head_attention_forward
 
@@ -43,7 +43,8 @@ class MultiheadAttention(Module):
     }
     __constants__ = ['q_proj_weight', 'k_proj_weight', 'v_proj_weight', 'in_proj_weight']
 
-    def __init__(self, embed_dim, num_heads, dropout=0., bias=True, add_bias_kv=False, add_zero_attn=False, kdim=None, vdim=None):
+    def __init__(self, embed_dim, num_heads, dropout=0., bias=True, add_bias_kv=False, add_zero_attn=False, kdim=None,
+                 vdim=None):
         super(MultiheadAttention, self).__init__()
         self.embed_dim = embed_dim
         self.kdim = kdim if kdim is not None else embed_dim

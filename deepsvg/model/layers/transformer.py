@@ -1,12 +1,12 @@
-import torch
 import copy
 
+import torch
 from torch.nn import functional as F
-from torch.nn.modules.module import Module
-from torch.nn.modules.container import ModuleList
 from torch.nn.init import xavier_uniform_
+from torch.nn.modules.container import ModuleList
 from torch.nn.modules.dropout import Dropout
 from torch.nn.modules.linear import Linear
+from torch.nn.modules.module import Module
 from torch.nn.modules.normalization import LayerNorm
 
 from .attention import MultiheadAttention
@@ -125,7 +125,6 @@ class Transformer(Module):
                               memory_key_padding_mask=memory_key_padding_mask)
         return output
 
-
     def generate_square_subsequent_mask(self, sz):
         r"""Generate a square mask for the sequence. The masked positions are filled with float('-inf').
             Unmasked positions are filled with float(0.0).
@@ -133,7 +132,6 @@ class Transformer(Module):
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
         mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
         return mask
-
 
     def _reset_parameters(self):
         r"""Initiate parameters in the transformer model."""

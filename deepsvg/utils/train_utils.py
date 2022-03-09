@@ -1,13 +1,13 @@
+import glob
+import os
 import pathlib
+import random
 import shutil
 from datetime import datetime
 
+import numpy as np
 import torch
 import torch.nn as nn
-import os
-import random
-import numpy as np
-import glob
 
 
 def save_ckpt(checkpoint_dir, model, cfg=None, optimizer=None, scheduler_lr=None, scheduler_warmup=None,
@@ -44,7 +44,7 @@ def save_ckpt(checkpoint_dir, model, cfg=None, optimizer=None, scheduler_lr=None
 
 
 def save_ckpt_list(checkpoint_dir, model, cfg=None, optimizers=None, scheduler_lrs=None, scheduler_warmups=None,
-              stats=None, train_vars=None):
+                   stats=None, train_vars=None):
     if is_multi_gpu(model):
         model = model.module
 
@@ -53,11 +53,14 @@ def save_ckpt_list(checkpoint_dir, model, cfg=None, optimizers=None, scheduler_l
     }
 
     if optimizers is not None:
-        state["optimizers"] = [optimizer.state_dict() if optimizer is not None else optimizer for optimizer in optimizers]
+        state["optimizers"] = [optimizer.state_dict() if optimizer is not None else optimizer for optimizer in
+                               optimizers]
     if scheduler_lrs is not None:
-        state["scheduler_lrs"] = [scheduler_lr.state_dict() if scheduler_lr is not None else scheduler_lr for scheduler_lr in scheduler_lrs]
+        state["scheduler_lrs"] = [scheduler_lr.state_dict() if scheduler_lr is not None else scheduler_lr for
+                                  scheduler_lr in scheduler_lrs]
     if scheduler_warmups is not None:
-        state["scheduler_warmups"] = [scheduler_warmup.state_dict() if scheduler_warmup is not None else None for scheduler_warmup in scheduler_warmups]
+        state["scheduler_warmups"] = [scheduler_warmup.state_dict() if scheduler_warmup is not None else None for
+                                      scheduler_warmup in scheduler_warmups]
     if cfg is not None:
         state["cfg"] = cfg.to_dict()
     if stats is not None:
@@ -112,7 +115,7 @@ def load_ckpt(checkpoint_dir, model, cfg=None, optimizer=None, scheduler_lr=None
 
 
 def load_ckpt_list(checkpoint_dir, model, cfg=None, optimizers=None, scheduler_lrs=None, scheduler_warmups=None,
-              stats=None, train_vars=None):
+                   stats=None, train_vars=None):
     if not os.path.exists(checkpoint_dir):
         return False
 
@@ -130,7 +133,9 @@ def load_ckpt_list(checkpoint_dir, model, cfg=None, optimizers=None, scheduler_l
         model = model.module
     model.load_state_dict(state["model"], strict=False)
 
-    for optimizer, scheduler_lr, scheduler_warmup, optimizer_sd, scheduler_lr_sd, scheduler_warmups_sd in zip(optimizers, scheduler_lrs, scheduler_warmups, state["optimizers"], state["scheduler_lrs"], state["scheduler_warmups"]):
+    for optimizer, scheduler_lr, scheduler_warmup, optimizer_sd, scheduler_lr_sd, scheduler_warmups_sd in zip(
+            optimizers, scheduler_lrs, scheduler_warmups, state["optimizers"], state["scheduler_lrs"],
+            state["scheduler_warmups"]):
         if optimizer is not None and optimizer_sd is not None:
             optimizer.load_state_dict(optimizer_sd)
         if scheduler_lr is not None and scheduler_lr_sd is not None:

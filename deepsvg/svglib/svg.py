@@ -1,17 +1,20 @@
 from __future__ import annotations
-from .geom import *
-from xml.dom import expatbuilder
-import torch
+
+import io
+import math
+import os
+import random
 from typing import List, Union
+from xml.dom import expatbuilder
+
 import IPython.display as ipd
 import cairosvg
-from PIL import Image
-import io
-import os
-from moviepy.editor import ImageClip, concatenate_videoclips, ipython_display
-import math
-import random
 import networkx as nx
+import torch
+from PIL import Image
+from moviepy.editor import ImageClip, concatenate_videoclips, ipython_display
+
+from .geom import *
 
 Num = Union[int, float]
 

@@ -1,7 +1,8 @@
+import os
+import pickle
+
 from .project import DeepSVGProject
 from ..config import STATE_PATH
-import pickle
-import os
 
 
 class ToolMode:

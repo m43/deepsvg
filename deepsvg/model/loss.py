@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from deepsvg.difflib.tensor import SVGTensor
-from .utils import _get_padding_mask, _get_visibility_mask
 from .config import _DefaultConfig
+from .utils import _get_padding_mask, _get_visibility_mask
 
 
 class SVGLoss(nn.Module):
@@ -50,8 +51,10 @@ class SVGLoss(nn.Module):
 
         mask = self.cmd_args_mask[tgt_commands.long()]
 
-        loss_cmd = F.cross_entropy(command_logits[padding_mask.bool()].reshape(-1, self.cfg.n_commands), tgt_commands[padding_mask.bool()].reshape(-1).long())
-        loss_args = F.cross_entropy(args_logits[mask.bool()].reshape(-1, self.args_dim), tgt_args[mask.bool()].reshape(-1).long() + 1)  # shift due to -1 PAD_VAL
+        loss_cmd = F.cross_entropy(command_logits[padding_mask.bool()].reshape(-1, self.cfg.n_commands),
+                                   tgt_commands[padding_mask.bool()].reshape(-1).long())
+        loss_args = F.cross_entropy(args_logits[mask.bool()].reshape(-1, self.args_dim),
+                                    tgt_args[mask.bool()].reshape(-1).long() + 1)  # shift due to -1 PAD_VAL
 
         loss += weights["loss_cmd_weight"] * loss_cmd \
                 + weights["loss_args_weight"] * loss_args

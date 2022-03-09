@@ -1,6 +1,3 @@
-import torch
-
-
 def linear(a, b, x, min_x, max_x):
     """
     b             ___________
@@ -38,7 +35,9 @@ def _pack_group_batch(*args):
     if len(args) == 1:
         arg, = args
         return arg.reshape(arg.size(0), arg.size(1) * arg.size(2), *arg.shape[3:]) if arg is not None else None
-    return (*(arg.reshape(arg.size(0), arg.size(1) * arg.size(2), *arg.shape[3:]) if arg is not None else None for arg in args),)
+    return (
+    *(arg.reshape(arg.size(0), arg.size(1) * arg.size(2), *arg.shape[3:]) if arg is not None else None for arg in
+      args),)
 
 
 def _unpack_group_batch(N, *args):

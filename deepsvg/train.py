@@ -10,9 +10,7 @@ from torch.utils.data import DataLoader
 
 from deepsvg import utils
 from deepsvg.config import _Config
-from deepsvg.difflib.loss import chamfer_loss
 from deepsvg.utils import Stats, TrainVars, Timer
-from deepsvg.utils.utils import batchify
 
 
 def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=False, resume=False):

@@ -1,7 +1,8 @@
-import torch
-import matplotlib.pyplot as plt
-import PIL.Image
 import io
+
+import PIL.Image
+import matplotlib.pyplot as plt
+import torch
 
 
 def set_viewbox(viewbox):

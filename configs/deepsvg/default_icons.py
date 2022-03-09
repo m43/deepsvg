@@ -3,7 +3,6 @@ import random
 
 import torch.optim.lr_scheduler as lr_scheduler
 import torchvision.transforms.functional as TF
-from torchvision.utils import save_image
 
 from deepsvg.config import _Config
 from deepsvg.model.config import *
@@ -19,6 +18,7 @@ class ModelConfig(Hierarchical):
     """
     Overriding default model config.
     """
+
     def __init__(self):
         super().__init__()
 
@@ -89,13 +89,16 @@ class Config(_Config):
             tensor_pred = SVGTensor.from_cmd_args(commands_y[0].cpu(), args_y[0].cpu())
 
             try:
-                svg_path_sample = SVG.from_tensor(tensor_pred.data, viewbox=Bbox(256), allow_empty=True).normalize().split_paths().set_color("random")
+                svg_path_sample = SVG.from_tensor(tensor_pred.data, viewbox=Bbox(256),
+                                                  allow_empty=True).normalize().split_paths().set_color("random")
             except:
                 continue
 
             tensor_target = data["tensor_grouped"][0].copy().drop_sos().unpad()
-            svg_path_gt = SVG.from_tensor(tensor_target.data, viewbox=Bbox(256)).normalize().split_paths().set_color("random")
+            svg_path_gt = SVG.from_tensor(tensor_target.data, viewbox=Bbox(256)).normalize().split_paths().set_color(
+                "random")
 
             file_path = os.path.join(visualization_dir, f"{split}_reconstructions__i={i}_step={step:06d}.png")
-            img = make_grid([svg_path_sample, svg_path_gt]).draw(file_path=file_path, do_display=False, return_png=True, fill=False, with_points=False)
+            img = make_grid([svg_path_sample, svg_path_gt]).draw(file_path=file_path, do_display=False, return_png=True,
+                                                                 fill=False, with_points=False)
             summary_writer.add_image(f"reconstructions_{split}/{i}", TF.to_tensor(img), step)

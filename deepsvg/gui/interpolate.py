@@ -1,28 +1,24 @@
 import torch
-from torch.utils.data import DataLoader
 import torch.nn as nn
+from torch.utils.data import DataLoader
 
 from configs.deepsvg.hierarchical_ordered import Config
-
 from deepsvg import utils
-from deepsvg.svglib.svg import SVG
 from deepsvg.difflib.tensor import SVGTensor
 from deepsvg.svglib.geom import Bbox
+from deepsvg.svglib.svg import SVG
 from deepsvg.svgtensor_dataset import load_dataset, SVGFinetuneDataset
 from deepsvg.utils.utils import batchify
-
 from .state.project import DeepSVGProject, Frame
 from .utils import easein_easeout
 
-
-device = torch.device("cuda:0"if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 pretrained_path = "./pretrained/hierarchical_ordered.pth.tar"
 
 cfg = Config()
 cfg.model_cfg.dropout = 0.  # for faster convergence
 model = cfg.make_model().to(device)
 model.eval()
-
 
 dataset = load_dataset(cfg)
 
@@ -45,7 +41,7 @@ def encode_svg(svg):
 def interpolate_svg(svg1, svg2, n=10, ease=True):
     z1, z2 = encode_svg(svg1), encode_svg(svg2)
 
-    alphas = torch.linspace(0., 1., n+2)[1:-1]
+    alphas = torch.linspace(0., 1., n + 2)[1:-1]
     if ease:
         alphas = easein_easeout(alphas)
 

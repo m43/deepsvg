@@ -1,7 +1,6 @@
+from deepsvg.svglib.geom import Bbox
 from deepsvg.svglib.svg import SVG
 from deepsvg.svglib.svg_path import SVGPath
-from deepsvg.svglib.geom import Bbox
-
 
 color_dict = {
     "deepskyblue": [0., 0.69, 0.97],
@@ -11,7 +10,7 @@ color_dict = {
     "coral": [1., 0.45, 0.27],
     "darkviolet": [0.53, 0.01, 0.8],
     "royalblue": [0.21, 0.36, 0.86],
-    "darkmagenta":  [0.5, 0., 0.5],
+    "darkmagenta": [0.5, 0., 0.5],
     "teal": [0., 0.45, 0.45],
     "green": [0., 0.45, 0.],
     "maroon": [0.45, 0., 0.],

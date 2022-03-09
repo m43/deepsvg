@@ -16,21 +16,21 @@ def generate_square_subsequent_mask(sz):
 
 
 def generate_adj_subsequent_mask(sz):
-    mask = torch.diag(torch.ones(sz), diagonal=0) + torch.diag(torch.ones(sz-1), diagonal=-1)
+    mask = torch.diag(torch.ones(sz), diagonal=0) + torch.diag(torch.ones(sz - 1), diagonal=-1)
 
     if sz >= 2:
-        mask = mask + torch.diag(torch.ones(sz-2), diagonal=-2)
+        mask = mask + torch.diag(torch.ones(sz - 2), diagonal=-2)
 
     return to_negative_mask(mask)
 
 
 def generate_adj_mask(sz):
-    mask = torch.diag(torch.ones(sz), diagonal=0) +\
-           torch.diag(torch.ones(sz - 1), diagonal=+1) +\
+    mask = torch.diag(torch.ones(sz), diagonal=0) + \
+           torch.diag(torch.ones(sz - 1), diagonal=+1) + \
            torch.diag(torch.ones(sz - 1), diagonal=-1)
 
     if sz >= 2:
-        mask = mask + torch.diag(torch.ones(sz - 2), diagonal=-2) +\
+        mask = mask + torch.diag(torch.ones(sz - 2), diagonal=-2) + \
                torch.diag(torch.ones(sz - 2), diagonal=+2)
 
     return to_negative_mask(mask)

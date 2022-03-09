@@ -1,9 +1,11 @@
+import math
+
+import IPython.display as ipd
+import numpy as np
+from moviepy.editor import ImageClip, concatenate_videoclips, ipython_display
+
 import deepsvg.svglib.svg as svg_lib
 from .geom import Bbox, Point
-import math
-import numpy as np
-import IPython.display as ipd
-from moviepy.editor import ImageClip, concatenate_videoclips, ipython_display
 
 
 def make_grid(svgs, num_cols=3, grid_width=24):

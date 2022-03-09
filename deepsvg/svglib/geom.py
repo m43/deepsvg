@@ -1,8 +1,11 @@
 from __future__ import annotations
-import numpy as np
+
 from enum import Enum
-import torch
 from typing import List, Union
+
+import numpy as np
+import torch
+
 Num = Union[int, float]
 float_type = (int, float, np.float32)
 
@@ -180,7 +183,7 @@ class Point(Geom):
         return self / self.norm()
 
     def numericalize(self, n=256):
-        self.pos = self.pos.round().clip(min=0, max=n-1)
+        self.pos = self.pos.round().clip(min=0, max=n - 1)
 
     def isclose(self, other: Point):
         return np.allclose(self.pos, other.pos)

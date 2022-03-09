@@ -1,5 +1,5 @@
-from kivy.uix.textinput import TextInput
 from kivy.properties import StringProperty
+from kivy.uix.textinput import TextInput
 
 DEFAULT_PADDING = 6
 

@@ -1,7 +1,8 @@
 import torch
-from deepsvg.difflib.tensor import SVGTensor
-from torch.distributions.categorical import Categorical
 import torch.nn.functional as F
+from torch.distributions.categorical import Categorical
+
+from deepsvg.difflib.tensor import SVGTensor
 
 
 def _get_key_padding_mask(commands, seq_dim=0):
@@ -25,7 +26,8 @@ def _get_padding_mask(commands, seq_dim=0, extended=False):
         if extended:
             # padding_mask doesn't include the final EOS, extend by 1 position to include it in the loss
             S = commands.size(seq_dim)
-            torch.narrow(padding_mask, seq_dim, 3, S-3).add_(torch.narrow(padding_mask, seq_dim, 0, S-3)).clamp_(max=1)
+            torch.narrow(padding_mask, seq_dim, 3, S - 3).add_(torch.narrow(padding_mask, seq_dim, 0, S - 3)).clamp_(
+                max=1)
 
         if seq_dim == 0:
             return padding_mask.unsqueeze(-1)

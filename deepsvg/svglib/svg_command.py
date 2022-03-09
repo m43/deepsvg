@@ -1,11 +1,15 @@
 from __future__ import annotations
-from .geom import *
-from deepsvg.difflib.tensor import SVGTensor
-from .util_fns import get_roots
-from enum import Enum
-import torch
+
 import math
+from enum import Enum
 from typing import List, Union
+
+import torch
+
+from deepsvg.difflib.tensor import SVGTensor
+from .geom import *
+from .util_fns import get_roots
+
 Num = Union[int, float]
 
 
@@ -81,7 +85,7 @@ class SVGCommand:
             args = []
             for ArgType in svgCmdArgTypes[cmd.value]:
                 num_args = ArgType.num_args
-                arg = ArgType(*args_str[i:i+num_args])
+                arg = ArgType(*args_str[i:i + num_args])
 
                 if cmd_str.islower():
                     arg.translate(pos)
@@ -144,7 +148,8 @@ class SVGCommand:
         control2 = Point(*args[9:11].tolist())
         end_pos = Point(*args[11:].tolist())
 
-        return SVGCommand.from_args(cmd, radius, x_axis_rotation, large_arc_flag, sweep_flag, start_pos, control1, control2, end_pos)
+        return SVGCommand.from_args(cmd, radius, x_axis_rotation, large_arc_flag, sweep_flag, start_pos, control1,
+                                    control2, end_pos)
 
     @staticmethod
     def from_args(command: SVGCmdEnum, radius: Radius, x_axis_rotation: Angle, large_arc_flag: Flag,
@@ -233,7 +238,7 @@ class SVGCommandLinear(SVGCommand):
 
 
 class SVGCommandMove(SVGCommandLinear):
-    def __init__(self, start_pos: Point, end_pos: Point=None):
+    def __init__(self, start_pos: Point, end_pos: Point = None):
         if end_pos is None:
             start_pos, end_pos = Point(0.), start_pos
         super().__init__(SVGCmdEnum.MOVE_TO, [end_pos], start_pos, end_pos)
@@ -256,14 +261,14 @@ class SVGCommandLine(SVGCommandLinear):
         z = np.linspace(0., 1., n)
 
         if return_array:
-            points = (1-z)[:, None] * self.start_pos.pos[None] + z[:, None] * self.end_pos.pos[None]
+            points = (1 - z)[:, None] * self.start_pos.pos[None] + z[:, None] * self.end_pos.pos[None]
             return points
 
         points = [(1 - alpha) * self.start_pos + alpha * self.end_pos for alpha in z]
         return points
 
     def split(self, n=2):
-        points = self.sample_points(n+1)
+        points = self.sample_points(n + 1)
         return [SVGCommandLine(p1, p2) for p1, p2 in zip(points[:-1], points[1:])]
 
     def length(self):
@@ -349,13 +354,16 @@ class SVGCommandBezier(SVGCommand):
         return [handle_1, handle_2, anchor_1, anchor_2]
 
     def eval(self, t):
-        return (1 - t)**3 * self.start_pos + 3 * (1 - t)**2 * t * self.control1 + 3 * (1 - t) * t**2 * self.control2 + t**3 * self.end_pos
+        return (1 - t) ** 3 * self.start_pos + 3 * (1 - t) ** 2 * t * self.control1 + 3 * (
+                    1 - t) * t ** 2 * self.control2 + t ** 3 * self.end_pos
 
     def derivative(self, t, n=1):
         if n == 1:
-            return 3 * (1 - t)**2 * (self.control1 - self.start_pos) + 6 * (1 - t) * t * (self.control2 - self.control1) + 3 * t**2 * (self.end_pos - self.control2)
+            return 3 * (1 - t) ** 2 * (self.control1 - self.start_pos) + 6 * (1 - t) * t * (
+                        self.control2 - self.control1) + 3 * t ** 2 * (self.end_pos - self.control2)
         elif n == 2:
-            return 6 * (1 - t) * (self.control2 - 2 * self.control1 + self.start_pos) + 6 * t * (self.end_pos - 2 * self.control2 + self.control1)
+            return 6 * (1 - t) * (self.control2 - 2 * self.control1 + self.start_pos) + 6 * t * (
+                        self.end_pos - 2 * self.control2 + self.control1)
 
         raise NotImplementedError
 
@@ -370,7 +378,7 @@ class SVGCommandBezier(SVGCommand):
         b = self.to_vector()
 
         z = np.linspace(0., 1., n)
-        Z = np.stack([np.ones_like(z), z, z**2, z**3], axis=1)
+        Z = np.stack([np.ones_like(z), z, z ** 2, z ** 3], axis=1)
         Q = np.array([[1., 0., 0., 0.],
                       [-3, 3., 0., 0.],
                       [3., -6, 3., 0.],
@@ -432,8 +440,10 @@ class SVGCommandBezier(SVGCommand):
 
 
 class SVGCommandArc(SVGCommand):
-    def __init__(self, start_pos: Point, radius: Radius, x_axis_rotation: Angle, large_arc_flag: Flag, sweep_flag: Flag, end_pos: Point):
-        super().__init__(SVGCmdEnum.ELLIPTIC_ARC, [radius, x_axis_rotation, large_arc_flag, sweep_flag, end_pos], start_pos, end_pos)
+    def __init__(self, start_pos: Point, radius: Radius, x_axis_rotation: Angle, large_arc_flag: Flag, sweep_flag: Flag,
+                 end_pos: Point):
+        super().__init__(SVGCmdEnum.ELLIPTIC_ARC, [radius, x_axis_rotation, large_arc_flag, sweep_flag, end_pos],
+                         start_pos, end_pos)
 
         self.radius = radius
         self.x_axis_rotation = x_axis_rotation
@@ -441,7 +451,8 @@ class SVGCommandArc(SVGCommand):
         self.sweep_flag = sweep_flag
 
     def copy(self):
-        return SVGCommandArc(self.start_pos.copy(), self.radius.copy(), self.x_axis_rotation.copy(), self.large_arc_flag.copy(),
+        return SVGCommandArc(self.start_pos.copy(), self.radius.copy(), self.x_axis_rotation.copy(),
+                             self.large_arc_flag.copy(),
                              self.sweep_flag.copy(), self.end_pos.copy())
 
     def to_tensor(self, PAD_VAL=-1):
@@ -463,8 +474,8 @@ class SVGCommandArc(SVGCommand):
         p1_trans = h.rotate(-self.x_axis_rotation)
 
         sign = -1 if self.large_arc_flag.flag == self.sweep_flag.flag else 1
-        x2, y2, rx2, ry2 = p1_trans.x**2, p1_trans.y**2, r.x**2, r.y**2
-        sqrt = math.sqrt(max((rx2*ry2 - rx2*y2 - ry2*x2) / (rx2*y2 + ry2*x2), 0.))
+        x2, y2, rx2, ry2 = p1_trans.x ** 2, p1_trans.y ** 2, r.x ** 2, r.y ** 2
+        sqrt = math.sqrt(max((rx2 * ry2 - rx2 * y2 - ry2 * x2) / (rx2 * y2 + ry2 * x2), 0.))
         c_trans = sign * sqrt * Point(r.x * p1_trans.y / r.y, -r.y * p1_trans.x / r.x)
 
         c = c_trans.rotate(self.x_axis_rotation) + m
@@ -499,10 +510,10 @@ class SVGCommandArc(SVGCommand):
 
         c, theta_1, delta_theta = self._get_center_parametrization()
         nb_curves = max(int(abs(delta_theta.deg) // 45), 1)
-        etas = [theta_1 + i * delta_theta / nb_curves for i in range(nb_curves+1)]
+        etas = [theta_1 + i * delta_theta / nb_curves for i in range(nb_curves + 1)]
         for eta_1, eta_2 in zip(etas[:-1], etas[1:]):
             e1, e2 = eta_1.rad, eta_2.rad
-            alpha = np.sin(e2 - e1) * (math.sqrt(4 + 3 * np.tan(0.5 * (e2 - e1))**2) - 1) / 3
+            alpha = np.sin(e2 - e1) * (math.sqrt(4 + 3 * np.tan(0.5 * (e2 - e1)) ** 2) - 1) / 3
             p1, p2 = self._get_point(c, e1), self._get_point(c, e2)
             q1 = p1 + alpha * self._get_derivative(e1)
             q2 = p2 - alpha * self._get_derivative(e2)
@@ -511,7 +522,8 @@ class SVGCommandArc(SVGCommand):
         return beziers
 
     def reverse(self):
-        return SVGCommandArc(self.end_pos, self.radius, self.x_axis_rotation, self.large_arc_flag, ~self.sweep_flag, self.start_pos)
+        return SVGCommandArc(self.end_pos, self.radius, self.x_axis_rotation, self.large_arc_flag, ~self.sweep_flag,
+                             self.start_pos)
 
     def numericalize(self, n=256):
         raise NotImplementedError

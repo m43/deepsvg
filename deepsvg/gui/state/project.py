@@ -1,13 +1,13 @@
-import os
-import uuid
 import json
+import os
+import shutil
+import uuid
+
 import numpy as np
 from moviepy.editor import ImageClip, concatenate_videoclips
-import shutil
 
-from deepsvg.svglib.svg import SVG
 from deepsvg.svglib.geom import Bbox
-
+from deepsvg.svglib.svg import SVG
 from ..config import ROOT_DIR
 
 

@@ -59,12 +59,16 @@ class SVGTensorDataset(torch.utils.data.Dataset):
 
     @staticmethod
     def _category_to_label(category):
-        categories = ['characters', 'free-icons', 'logos', 'alphabet', 'animals', 'arrows', 'astrology', 'baby', 'beauty',
+        categories = ['characters', 'free-icons', 'logos', 'alphabet', 'animals', 'arrows', 'astrology', 'baby',
+                      'beauty',
                       'business', 'cinema', 'city', 'clothing', 'computer-hardware', 'crime', 'cultures', 'data', 'diy',
-                      'drinks', 'ecommerce', 'editing', 'files', 'finance', 'folders', 'food', 'gaming', 'hands', 'healthcare',
+                      'drinks', 'ecommerce', 'editing', 'files', 'finance', 'folders', 'food', 'gaming', 'hands',
+                      'healthcare',
                       'holidays', 'household', 'industry', 'maps', 'media-controls', 'messaging', 'military', 'mobile',
-                      'music', 'nature', 'network', 'photo-video', 'plants', 'printing',  'profile', 'programming', 'science',
-                      'security', 'shopping', 'social-networks', 'sports', 'time-and-date', 'transport', 'travel', 'user-interface',
+                      'music', 'nature', 'network', 'photo-video', 'plants', 'printing', 'profile', 'programming',
+                      'science',
+                      'security', 'shopping', 'social-networks', 'sports', 'time-and-date', 'transport', 'travel',
+                      'user-interface',
                       'users', 'weather', 'flags', 'emoji', 'men', 'women']
         return categories.index(category)
 
@@ -158,7 +162,8 @@ class SVGTensorDataset(torch.utils.data.Dataset):
 
         t_grouped = [SVGTensor.from_data(torch.cat(t_sep, dim=0), PAD_VAL=self.PAD_VAL).add_eos().add_sos().pad(
             seq_len=self.MAX_TOTAL_LEN + 2)]
-        t_sep = [SVGTensor.from_data(t, PAD_VAL=self.PAD_VAL, filling=f).add_eos().add_sos().pad(seq_len=self.MAX_SEQ_LEN + 2) for
+        t_sep = [SVGTensor.from_data(t, PAD_VAL=self.PAD_VAL, filling=f).add_eos().add_sos().pad(
+            seq_len=self.MAX_SEQ_LEN + 2) for
                  t, f in zip(t_sep, fillings)]
 
         for arg in set(model_args):
@@ -194,6 +199,7 @@ class SVGFinetuneDataset(torch.utils.data.Dataset):
     Wrapper around SVGTensorDataset intended to finetune a model on a list of additional SVGs.
     Randomly samples fraction `frac` of SVGs to be finetuned and `1-frac` of data from the original SVGTensorDataset.
     """
+
     def __init__(self, original_dataset: SVGTensorDataset, svg_list: List[SVG], frac=0.5, nb_augmentations=20):
         self.original_dataset = original_dataset
         self.svg_list = svg_list

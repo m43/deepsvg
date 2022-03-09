@@ -1,16 +1,18 @@
 from __future__ import annotations
-from .geom import *
-import torch
-import re
-from typing import List, Union
-from xml.dom import minidom
-from .svg_path import SVGPath
-from .svg_command import SVGCommandLine, SVGCommandArc, SVGCommandBezier, SVGCommandClose
-import shapely
-import shapely.ops
-import shapely.geometry
-import networkx as nx
 
+import re
+from typing import List
+from xml.dom import minidom
+
+import networkx as nx
+import shapely
+import shapely.geometry
+import shapely.ops
+import torch
+
+from .geom import *
+from .svg_command import SVGCommandLine, SVGCommandArc
+from .svg_path import SVGPath
 
 FLOAT_RE = re.compile(r"[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?")
 
@@ -23,6 +25,7 @@ class SVGPrimitive:
     """
     Reference: https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Basic_Shapes
     """
+
     def __init__(self, color="black", fill=False, dasharray=None, stroke_width=".3", opacity=1.0):
         self.color = color
         self.dasharray = dasharray
@@ -45,7 +48,8 @@ class SVGPrimitive:
         from .svg import SVG
         return SVG([self], viewbox=viewbox).draw(*args, **kwargs)
 
-    def _get_viz_elements(self, with_points=False, with_handles=False, with_bboxes=False, color_firstlast=True, with_moves=True):
+    def _get_viz_elements(self, with_points=False, with_handles=False, with_bboxes=False, color_firstlast=True,
+                          with_moves=True):
         return []
 
     def to_path(self):
@@ -198,7 +202,7 @@ class SVGPolyline(SVGPrimitive):
 
         args = extract_args(x.getAttribute("points"))
         assert len(args) % 2 == 0, f"Expected even number of arguments for SVGPolyline: {len(args)} given"
-        points = [Point(x, args[2*i+1]) for i, x in enumerate(args[::2])]
+        points = [Point(x, args[2 * i + 1]) for i, x in enumerate(args[::2])]
         return cls(points, fill=fill)
 
     def to_path(self):
@@ -273,10 +277,12 @@ class SVGPathGroup(SVGPrimitive):
     def __repr__(self):
         return "SVGPathGroup({})".format(", ".join(svg_path.__repr__() for svg_path in self.svg_paths))
 
-    def _get_viz_elements(self, with_points=False, with_handles=False, with_bboxes=False, color_firstlast=True, with_moves=True):
+    def _get_viz_elements(self, with_points=False, with_handles=False, with_bboxes=False, color_firstlast=True,
+                          with_moves=True):
         viz_elements = []
         for svg_path in self.svg_paths:
-            viz_elements.extend(svg_path._get_viz_elements(with_points, with_handles, with_bboxes, color_firstlast, with_moves))
+            viz_elements.extend(
+                svg_path._get_viz_elements(with_points, with_handles, with_bboxes, color_firstlast, with_moves))
 
         if with_bboxes:
             viz_elements.append(self._get_bbox_viz())
@@ -295,7 +301,8 @@ class SVGPathGroup(SVGPrimitive):
         fill_attr = self._get_fill_attr()
         marker_attr = 'marker-start="url(#arrow)"' if with_markers else ''
         return '<path {} {} filling="{}" d="{}"></path>'.format(fill_attr, marker_attr, self.path.filling,
-                                                   " ".join(svg_path.to_str() for svg_path in self.svg_paths))
+                                                                " ".join(
+                                                                    svg_path.to_str() for svg_path in self.svg_paths))
 
     def to_tensor(self, PAD_VAL=-1):
         return torch.cat([p.to_tensor(PAD_VAL=PAD_VAL) for p in self.svg_paths], dim=0)

@@ -1,12 +1,7 @@
-import torch
-import copy
-
 from torch.nn import functional as F
-from torch.nn.modules.module import Module
-from torch.nn.modules.container import ModuleList
-from torch.nn.init import xavier_uniform_
 from torch.nn.modules.dropout import Dropout
 from torch.nn.modules.linear import Linear
+from torch.nn.modules.module import Module
 from torch.nn.modules.normalization import LayerNorm
 
 from .attention import MultiheadAttention
@@ -85,7 +80,8 @@ class TransformerDecoderLayerImproved(Module):
         tgt = tgt + self.dropout1(tgt2)
 
         tgt1 = self.norm2(tgt)
-        tgt2 = self.multihead_attn(tgt1, memory, memory, attn_mask=memory_mask, key_padding_mask=memory_key_padding_mask)[0]
+        tgt2 = \
+        self.multihead_attn(tgt1, memory, memory, attn_mask=memory_mask, key_padding_mask=memory_key_padding_mask)[0]
         tgt = tgt + self.dropout2(tgt2)
 
         tgt1 = self.norm3(tgt)

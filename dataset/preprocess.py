@@ -1,10 +1,11 @@
-from concurrent import futures
+import glob
+import logging
 import os
 from argparse import ArgumentParser
-import logging
-from tqdm import tqdm
-import glob
+from concurrent import futures
+
 import pandas as pd
+from tqdm import tqdm
 
 from deepsvg.svglib.svg import SVG
 
@@ -39,7 +40,7 @@ def main(args):
 
         with tqdm(total=len(svg_files)) as pbar:
             preprocess_requests = [executor.submit(preprocess_svg, svg_file, args.output_folder, meta_data)
-                                    for svg_file in svg_files]
+                                   for svg_file in svg_files]
 
             for _ in futures.as_completed(preprocess_requests):
                 pbar.update(1)

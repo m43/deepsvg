@@ -1,18 +1,18 @@
 from kivy.app import App
-from kivy.uix.widget import Widget
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
-from kivy.uix.scatter import Scatter
-from kivy.uix.label import Label
-from kivy.uix.scrollview import ScrollView
+from kivy.clock import Clock
+from kivy.config import Config
+from kivy.metrics import dp
 from kivy.properties import BooleanProperty, StringProperty, NumericProperty, ListProperty, ObjectProperty
 from kivy.uix.behaviors import ButtonBehavior
-from kivy.vector import Vector
-from kivy.metrics import dp
-from kivy.clock import Clock
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
+from kivy.uix.label import Label
 from kivy.uix.popup import Popup
+from kivy.uix.scatter import Scatter
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.widget import Widget
+from kivy.vector import Vector
 
-from kivy.config import Config
 Config.set('graphics', 'width', '1400')
 Config.set('graphics', 'height', '800')
 from kivy.core.window import Window
@@ -30,7 +30,6 @@ from .state.project import Frame
 from .config import ROOT_DIR
 from .interpolate import compute_interpolation
 from .utils import *
-
 
 if not os.path.exists(ROOT_DIR):
     os.makedirs(ROOT_DIR)
@@ -260,7 +259,7 @@ class BezierSegment(Widget):
 
     def on_touch_down(self, touch):
         max_dist = dp(self.select_dist)
-        
+
         if not self.parent.selected:
             return super().on_touch_down(touch)
 
@@ -332,7 +331,7 @@ class BezierPath(Widget):
         idx = self.children.index(segment)
 
         if not (idx == 0 and key == "p1") and not (idx == len(self.children) - 1 and key == "p2"):
-            idx2, key2 = (idx-1, "p2") if key == "p1" else (idx+1, "p1")
+            idx2, key2 = (idx - 1, "p2") if key == "p1" else (idx + 1, "p1")
             setattr(self.children[idx2], key2, pos)
 
     def add_widget(self, widget, index=0, canvas=None):
@@ -490,7 +489,8 @@ class DrawViewbox(Widget):
         if not os.path.exists(miniature_path) or force_rerender_miniature:
             svg_path = normalized_path(svg_path)
             svg_path.draw(viewbox=svg_path.bbox().make_square(min_size=12),
-                          file_path=os.path.join(state.project.cache_dir, f"{state.timeline.selected_frame}_{path_idx}.png"),
+                          file_path=os.path.join(state.project.cache_dir,
+                                                 f"{state.timeline.selected_frame}_{path_idx}.png"),
                           do_display=False)
 
         if not state.header.is_playing:
@@ -577,7 +577,8 @@ class DrawViewbox(Widget):
     def save_frame(self):
         svg = self.to_svg()
         state.project.frames[state.current_frame].svg = svg
-        state.project.frames[state.current_frame].kivy_bezierpaths = [child for child in reversed(self.children) if isinstance(child, BezierPath)]
+        state.project.frames[state.current_frame].kivy_bezierpaths = [child for child in reversed(self.children) if
+                                                                      isinstance(child, BezierPath)]
 
 
 class HeaderButton(Button):

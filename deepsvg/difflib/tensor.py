@@ -1,7 +1,10 @@
 from __future__ import annotations
+
+from typing import Union
+
 import torch
 import torch.utils.data
-from typing import Union
+
 Num = Union[int, float]
 
 
@@ -12,12 +15,12 @@ class SVGTensor:
     #                              rad  x  lrg sw  ctrl ctrl  end
     #                              ius axs arc eep  1    2    pos
     #                                   rot fg fg
-    CMD_ARGS_MASK = torch.tensor([[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],   # m
-                                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],   # l
-                                  [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],   # c
-                                  [1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1],   # a
-                                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],   # EOS
-                                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],   # SOS
+    CMD_ARGS_MASK = torch.tensor([[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],  # m
+                                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],  # l
+                                  [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],  # c
+                                  [1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1],  # a
+                                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # EOS
+                                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # SOS
                                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])  # z
 
     class Index:
@@ -83,14 +86,17 @@ class SVGTensor:
 
     @staticmethod
     def from_data(data, *args, **kwargs):
-        return SVGTensor(data[:, SVGTensor.Index.COMMAND], data[:, SVGTensor.Index.RADIUS], data[:, SVGTensor.Index.X_AXIS_ROT],
-                         data[:, SVGTensor.Index.LARGE_ARC_FLG], data[:, SVGTensor.Index.SWEEP_FLG], data[:, SVGTensor.Index.CONTROL1],
+        return SVGTensor(data[:, SVGTensor.Index.COMMAND], data[:, SVGTensor.Index.RADIUS],
+                         data[:, SVGTensor.Index.X_AXIS_ROT],
+                         data[:, SVGTensor.Index.LARGE_ARC_FLG], data[:, SVGTensor.Index.SWEEP_FLG],
+                         data[:, SVGTensor.Index.CONTROL1],
                          data[:, SVGTensor.Index.CONTROL2], data[:, SVGTensor.Index.END_POS], *args, **kwargs)
 
     @staticmethod
     def from_cmd_args(commands, args, *nargs, **kwargs):
         return SVGTensor(commands, args[:, SVGTensor.IndexArgs.RADIUS], args[:, SVGTensor.IndexArgs.X_AXIS_ROT],
-                         args[:, SVGTensor.IndexArgs.LARGE_ARC_FLG], args[:, SVGTensor.IndexArgs.SWEEP_FLG], args[:, SVGTensor.IndexArgs.CONTROL1],
+                         args[:, SVGTensor.IndexArgs.LARGE_ARC_FLG], args[:, SVGTensor.IndexArgs.SWEEP_FLG],
+                         args[:, SVGTensor.IndexArgs.CONTROL1],
                          args[:, SVGTensor.IndexArgs.CONTROL2], args[:, SVGTensor.IndexArgs.END_POS], *nargs, **kwargs)
 
     def get_data(self, keys):
