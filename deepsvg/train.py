@@ -1,7 +1,9 @@
 import argparse
 import importlib
 import os
+from collections import defaultdict
 
+import pandas as pd
 import torch
 import torch.nn as nn
 import tqdm
@@ -10,6 +12,9 @@ from torch.utils.data import DataLoader
 
 from deepsvg import utils
 from deepsvg.config import _Config
+from deepsvg.difflib.tensor import SVGTensor
+from deepsvg.svglib.geom import Bbox
+from deepsvg.svglib.svg import SVG
 from deepsvg.utils import Stats, TrainVars, Timer
 
 
@@ -63,8 +68,8 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
     loss_fns = [l.to(device) for l in cfg.make_losses()]
 
     if resume:
-        ckpt_exists = utils.load_ckpt_list(checkpoint_dir, model, None, optimizers, scheduler_lrs, scheduler_warmups,
-                                           stats, train_vars)
+        ckpt_exists = utils.load_ckpt_list(checkpoint_dir, model, device, None, optimizers, scheduler_lrs,
+                                           scheduler_warmups, stats, train_vars)
 
     if resume and ckpt_exists:
         print(f"Resuming model at epoch {stats.epoch + 1}")
@@ -89,6 +94,7 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
 
         for n_iter, data in enumerate(train_dataloader):
             step = n_iter + epoch * len(train_dataloader)
+            timer.reset()
 
             if cfg.num_steps is not None and step > cfg.num_steps:
                 return
@@ -130,17 +136,12 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
             if step % cfg.log_every == 0 and step > 0:
                 print(stats.get_summary("train"))
                 stats.write_tensorboard(summary_writer, "train")
+                stats.reset_buffers()
                 summary_writer.flush()
 
-            if step % cfg.val_every == 0 and step > 0:
-                model.eval()
-
-                with torch.no_grad():
-                    # Visualization
-                    output = None
-                    cfg.visualize(model, output, train_vars, step, epoch, summary_writer, visualization_dir)
-
-                timer.reset()
+            # if step % cfg.val_every == 0 and step > 0:
+            #     evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid",
+            #              stats, epoch, step, summary_writer, visualization_dir)
 
             if not debug and step % cfg.ckpt_every == 0 and step > 0:
                 utils.save_ckpt_list(checkpoint_dir, model, cfg, optimizers, scheduler_lrs, scheduler_warmups, stats,
@@ -154,11 +155,14 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
 def evaluate(cfg, model, device, loss_fns, vars, dataloader, split, stats, epoch, step, summary_writer,
              visualization_dir):
     print(f"Evaluate on: {split}")
+    if len(dataloader) == 0:
+        print("len(dataloader)=0")
+        return
+
     timer = Timer()
     model.eval()
     with torch.no_grad():
         for data in tqdm.tqdm(dataloader):
-
             model_args = [data[arg].to(device) for arg in cfg.model_args]
             labels = data["label"].to(device) if "label" in data else None
             params_dict, weights_dict = cfg.get_params(step, epoch), cfg.get_weights(step, epoch)
@@ -169,6 +173,23 @@ def evaluate(cfg, model, device, loss_fns, vars, dataloader, split, stats, epoch
                 stats.update_stats_to_print(split, loss_dict.keys())
                 stats.update(split, step, epoch, {**loss_dict})
 
+        # Visualization
+        output = None
+        cfg.visualize(model, output, vars, step, epoch, summary_writer, visualization_dir, split)
+
+        # Reconstruction error
+        # TODO hack: add temporary model args to dataloader.dataset
+        tmp_model_args = ["commands_grouped", "args_grouped"]
+        dataloader.dataset.model_args = list(dataloader.dataset.model_args) + tmp_model_args
+
+        loss_dict = reconstruction_loss_for_svg_sampled_points(model.module, cfg, dataloader)
+
+        stats.update_stats_to_print(split, loss_dict.keys())
+        stats.update(split, step, epoch, {**loss_dict})
+
+        # TODO hack: remove tmp_model_args
+        dataloader.dataset.model_args = dataloader.dataset.model_args[:-len(tmp_model_args)]
+
     stats.update(split, step, epoch, {
         **weights_dict,
         "time": timer.get_elapsed_time()
@@ -176,9 +197,71 @@ def evaluate(cfg, model, device, loss_fns, vars, dataloader, split, stats, epoch
 
     print(stats.get_summary(split))
     stats.write_tensorboard(summary_writer, split)
+    stats.reset_buffers()
     summary_writer.flush()
-    output = None
-    cfg.visualize(model, output, vars, step, epoch, summary_writer, visualization_dir, split)
+
+
+def reconstruction_loss_for_svg_sampled_points(model, cfg, dataloader, show_logs=False):
+    losses_dict = defaultdict(list)
+    with torch.no_grad():
+        for data in tqdm.tqdm(dataloader):
+            res = _batch_reconstruction_loss_for_svg_sampled_points(model, cfg, data, show_logs)
+            for k, v in res.items():
+                losses_dict[k].extend(v)
+
+    loss_dict = {}
+    for k, losses in losses_dict.items():
+        df = pd.DataFrame(losses).describe().transpose()
+        df_keys = list(df.keys())
+        print(df)
+        loss_dict.update({k + "_" + df_key: float(df[df_key]) for df_key in df_keys})
+    return loss_dict
+
+
+def _batch_reconstruction_loss_for_svg_sampled_points(model, cfg, batch, show_logs=False):
+    device = next(model.parameters()).device
+    commands = batch["commands_grouped"]
+    args = batch["args_grouped"]
+    losses = defaultdict(list)
+    for i, (c, a) in enumerate(zip(commands, args)):  # TODO slow, but not possible to work with batches at the moment
+        # target points
+        tensor_target = SVGTensor.from_cmd_args(c[0], a[0]).copy().unpad().drop_sos()  # TODO copy problems with device
+        points_target = tensor_target.sample_points(n=cfg.n_recon_points)
+
+        # greedy sample prediction
+        model_args = [batch[arg][i].unsqueeze(0).to(device) for arg in cfg.model_args]
+        z = model.forward(*model_args, encode_mode=True)
+
+        commands_y, args_y = model.greedy_sample(z=z)
+
+        try:
+            # prediction points
+            tensor_pred = SVGTensor.from_cmd_args(commands_y[0], args_y[0])
+            points_pred = tensor_pred.sample_points(n=cfg.n_recon_points)
+        except Exception as e:
+            # print(f"TRY-CATCH, caught exception: {e}")
+            continue
+
+        points_target = points_target.to(points_pred.device)
+
+        # reconstruction loss
+        for k, loss_recon_fn in cfg.loss_recon_fn_dict.items():
+            losses[k].append(loss_recon_fn(points_pred / 256, points_target / 256).item())
+
+        if show_logs:
+            print(f"Reconstruction losses")
+            for k in cfg.loss_recon_fn_dict.keys():
+                print(f"LOSS {i:04} {k}:\t{losses[k][-1]}")
+
+            if i < 10:
+                print("TARGET:")
+                SVG.from_tensor(tensor_target.data, viewbox=Bbox(256)).normalize().split_paths().set_color(
+                    "random").draw()
+                print("PREDICTION:")
+                SVG.from_tensor(tensor_pred.data, viewbox=Bbox(256)).normalize().split_paths().set_color(
+                    "random").draw()
+
+    return losses
 
 
 if __name__ == "__main__":

@@ -79,7 +79,7 @@ def save_ckpt_list(checkpoint_dir, model, cfg=None, optimizers=None, scheduler_l
         shutil.copyfile(checkpoint_path, best_model_path)
 
 
-def load_ckpt(checkpoint_dir, model, cfg=None, optimizer=None, scheduler_lr=None, scheduler_warmup=None,
+def load_ckpt(checkpoint_dir, model, device, cfg=None, optimizer=None, scheduler_lr=None, scheduler_warmup=None,
               stats=None, train_vars=None):
     if not os.path.exists(checkpoint_dir):
         return False
@@ -92,7 +92,7 @@ def load_ckpt(checkpoint_dir, model, cfg=None, optimizer=None, scheduler_lr=None
             return False
         checkpoint_path = ckpts_paths[-1]
 
-    state = torch.load(checkpoint_path)
+    state = torch.load(checkpoint_path, map_location=device)
 
     if is_multi_gpu(model):
         model = model.module
@@ -114,7 +114,7 @@ def load_ckpt(checkpoint_dir, model, cfg=None, optimizer=None, scheduler_lr=None
     return True
 
 
-def load_ckpt_list(checkpoint_dir, model, cfg=None, optimizers=None, scheduler_lrs=None, scheduler_warmups=None,
+def load_ckpt_list(checkpoint_dir, model, device, cfg=None, optimizers=None, scheduler_lrs=None, scheduler_warmups=None,
                    stats=None, train_vars=None):
     if not os.path.exists(checkpoint_dir):
         return False
@@ -127,7 +127,7 @@ def load_ckpt_list(checkpoint_dir, model, cfg=None, optimizers=None, scheduler_l
             return False
         checkpoint_path = ckpts_paths[-1]
 
-    state = torch.load(checkpoint_path)
+    state = torch.load(checkpoint_path, map_location=device)
 
     if is_multi_gpu(model):
         model = model.module

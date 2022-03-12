@@ -1,5 +1,6 @@
 import torch.optim as optim
 
+from deepsvg.difflib.loss import chamfer_loss, svg_emd_loss
 from deepsvg.schedulers.warmup import GradualWarmupScheduler
 
 
@@ -46,7 +47,7 @@ class _Config:
 
         self.log_every = 20  #
         self.val_every = 1000  #
-        self.ckpt_every = 1000  #
+        self.ckpt_every = 20  #
 
         self.stats_to_print = {
             "train": ["lr", "time"],
@@ -55,6 +56,10 @@ class _Config:
 
         self.model_args = []  #
         self.optimizer_starts = [0]  #
+
+        # Reconstruction loss
+        self.n_recon_points = 20
+        self.loss_recon_fn_dict = {"loss_re": chamfer_loss, "loss_emd": svg_emd_loss}
 
     # Overridable methods
     def make_model(self):

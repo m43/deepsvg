@@ -37,6 +37,43 @@ class SmoothedValue(object):
         return self.total / self.count
 
 
+class MetricTracker(object):
+    """
+    Track a series of values and provide access both the global series and a buffer that can be reset.
+    """
+
+    def __init__(self):
+        self.buffer_values = []
+        self.all_values = []
+        self.total = 0.0
+        self.count = 0
+
+    def update(self, value):
+        self.buffer_values.append(value)
+        self.all_values.append(value)
+        self.count += 1
+        self.total += value
+
+    def median(self, buffer=True):
+        if buffer:
+            x = self.buffer_values
+        else:
+            x = self.all_values
+
+        return torch.tensor(x).median().item()
+
+    def avg(self, buffer=True):
+        if buffer:
+            x = self.buffer_values
+        else:
+            x = self.all_values
+
+        return torch.tensor(x).mean().item()
+
+    def reset_buffer(self):
+        self.buffer_values = []
+
+
 class Stats:
     def __init__(self, num_steps=None, num_epochs=None, steps_per_epoch=None, stats_to_print=None):
         self.step = self.epoch = 0
@@ -47,7 +84,7 @@ class Stats:
             self.num_steps = num_epochs * steps_per_epoch
 
         self.stats = {
-            k: defaultdict(SmoothedValue) for k in stats_to_print.keys()
+            k: defaultdict(MetricTracker) for k in stats_to_print.keys()
         }
         self.stats_to_print = {k: set(v) for k, v in stats_to_print.items()}
 
@@ -75,20 +112,26 @@ class Stats:
 
         if split == "train":
             completion_pct = self.step / self.num_steps * 100
-            eta_seconds = self.stats[split].get("time").global_avg * (self.num_steps - self.step)
+            eta_seconds = self.stats[split].get("time").avg(buffer=False) * (self.num_steps - self.step)
             eta_string = datetime.timedelta(seconds=int(eta_seconds))
 
             s = "[{}/{}, {:.1f}%] eta: {}, ".format(self.step, self.num_steps, completion_pct, eta_string)
         else:
             s = f"[Validation, epoch {self.epoch + 1}] "
 
-        return s + ", ".join(f"{stat}: {self.stats[split].get(stat).median:.4f}" for stat in self.stats_to_print[split])
+        return s + ", ".join(
+            f"{stat}: {self.stats[split].get(stat).median():.4f}" for stat in self.stats_to_print[split])
 
     def write_tensorboard(self, summary_writer, split):
-        summary_writer.add_scalar(f"{split}/epoch", self.epoch + 1, self.step)
+        summary_writer.add_scalar(f"epoch/{split}", self.epoch + 1, self.step)
 
         for stat in self.stats_to_print[split]:
-            summary_writer.add_scalar(f"{split}/{stat}", self.stats[split].get(stat).median, self.step)
+            summary_writer.add_scalar(f"{stat}/{split}", self.stats[split].get(stat).median(), self.step)
 
     def is_best(self):
         return True
+
+    def reset_buffers(self):
+        for split in self.stats.keys():
+            for stat in self.stats[split].keys():
+                self.stats[split][stat].reset_buffer()
