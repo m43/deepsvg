@@ -74,6 +74,7 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
     if resume and ckpt_exists:
         print(f"Resuming model at epoch {stats.epoch + 1}")
         stats.num_steps = cfg.num_epochs * len(train_dataloader)
+        stats.reset_stats_to_print()
     else:
         # Run a single forward pass on the single-device model for initialization of some modules
         single_foward_dataloader = DataLoader(train_dataset, batch_size=cfg.batch_size // cfg.num_gpus, shuffle=True,
