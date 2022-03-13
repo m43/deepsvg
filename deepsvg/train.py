@@ -9,6 +9,7 @@ import torch.nn as nn
 import tqdm
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
+from torch.utils.data.dataset import ConcatDataset
 
 from deepsvg import utils
 from deepsvg.config import _Config
@@ -18,7 +19,7 @@ from deepsvg.svglib.svg import SVG
 from deepsvg.utils import Stats, TrainVars, Timer
 
 
-def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=False, resume=False):
+def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=False, resume=False, eval_only=False):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
@@ -85,6 +86,15 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
         model(*model_args, params=params_dict)
 
     model = nn.DataParallel(model)
+
+    if eval_only:
+        dataset = ConcatDataset([train_dataset, test_dataset])
+        valid_dataloader = DataLoader(
+            dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
+            num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
+        evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid", stats, 0, 0, summary_writer,
+                 visualization_dir)
+        return
 
     if stats.epoch == 0:
         evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid", stats, 0, 0, summary_writer,
@@ -278,6 +288,7 @@ if __name__ == "__main__":
     parser.add_argument("--log-dir", type=str, default="./logs")
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--resume", action="store_true", default=False)
+    parser.add_argument("--eval-only", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=72)
 
     args = parser.parse_args()
@@ -286,4 +297,5 @@ if __name__ == "__main__":
     cfg = importlib.import_module(args.config_module).Config()
     model_name, experiment_name = args.config_module.split(".")[-2:]
 
-    train(cfg, model_name, experiment_name, log_dir=args.log_dir, debug=args.debug, resume=args.resume)
+    train(cfg, model_name, experiment_name, log_dir=args.log_dir, debug=args.debug, resume=args.resume,
+          eval_only=args.eval_only)

@@ -240,10 +240,8 @@ def load_dataset(cfg: _Config, _seed=72):
     valid_dataset = SVGTensorDataset(valid_df, cfg.data_dir, cfg.model_args,
                                      cfg.max_num_groups, cfg.max_seq_len, cfg.max_total_len)
 
-    print(f"Number of train SVGs: {len(train_df)}")
-    print(f"First SVG in train:"
-          f"{train_df.iloc[0]['id']} - {train_df.iloc[0]['category']} - {train_df.iloc[0]['subcategory']}")
+    print(f"\nNumber of train SVGs: {len(train_df)}")
+    print(f"First SVG in train:\n{train_df.iloc[0]}\n")
     print(f"Number of test SVGs: {len(valid_df)}")
-    print(f"First SVG in train:"
-          f"{valid_df.iloc[0]['id']} - {valid_df.iloc[0]['category']} - {valid_df.iloc[0]['subcategory']}")
+    print(f"First SVG in test:\n{valid_df.iloc[0]}\n")
     return train_dataset, valid_dataset

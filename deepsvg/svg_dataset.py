@@ -172,7 +172,7 @@ class SVGDataset(torch.utils.data.Dataset):
             seq_len=self.MAX_TOTAL_LEN + 2)]
         t_sep = [SVGTensor.from_data(t, PAD_VAL=self.PAD_VAL, filling=f).add_eos().add_sos().pad(
             seq_len=self.MAX_SEQ_LEN + 2) for
-                 t, f in zip(t_sep, fillings)]
+            t, f in zip(t_sep, fillings)]
 
         for arg in set(model_args):
             if "_grouped" in arg:
@@ -229,10 +229,8 @@ def load_dataset(cfg: _Config, already_preprocessed=True, _seed=72):
                                cfg.max_total_len, nb_augmentations=cfg.nb_augmentations,
                                already_preprocessed=already_preprocessed)
 
-    print(f"Number of train SVGs: {len(train_df)}")
-    print(f"First SVG in train:"
-          f"{train_df.iloc[0]['id']} - {train_df.iloc[0]['category']} - {train_df.iloc[0]['subcategory']}")
+    print(f"\nNumber of train SVGs: {len(train_df)}")
+    print(f"First SVG in train:\n{train_df.iloc[0]}\n")
     print(f"Number of test SVGs: {len(valid_df)}")
-    print(f"First SVG in train:"
-          f"{valid_df.iloc[0]['id']} - {valid_df.iloc[0]['category']} - {valid_df.iloc[0]['subcategory']}")
+    print(f"First SVG in test:\n{valid_df.iloc[0]}\n")
     return train_dataset, valid_dataset

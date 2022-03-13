@@ -108,6 +108,10 @@ class Stats:
     def update_stats_to_print(self, split, stats_to_print):
         self.stats_to_print[split].update(stats_to_print)
 
+    def reset_stats_to_print(self):
+        for split in self.stats_to_print.keys():
+            self.stats_to_print[split].clear()
+
     def get_summary(self, split):
 
         if split == "train":
