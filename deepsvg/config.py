@@ -59,7 +59,8 @@ class _Config:
 
         # Reconstruction loss
         self.n_recon_points = 20
-        self.loss_recon_fn_dict = {"loss_re": chamfer_loss, "loss_emd": svg_emd_loss}
+        # self.loss_recon_fn_dict = {"loss_re": chamfer_loss, "loss_emd": svg_emd_loss}
+        self.loss_recon_fn_dict = {"loss_re": chamfer_loss}
 
     # Overridable methods
     def make_model(self):

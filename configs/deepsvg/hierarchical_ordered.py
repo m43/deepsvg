@@ -23,5 +23,5 @@ class Config(Config):
 
         # self.num_epochs = 10
         # self.train_ratio = 0.999
-        self.val_every = 3600
+        self.val_every = 1000
         # self.pretrained_path = "logs/models/deepsvg/hierarchical_ordered/000020.pth.tar"

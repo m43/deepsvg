@@ -23,5 +23,6 @@ class Config(Config):
 
         self.num_epochs = 1
         self.train_ratio = 0.999
-
+        self.val_every = 1
+        self.batch_size = 20
         self.pretrained_path = "pretrained/hierarchical_ordered.pth.tar"

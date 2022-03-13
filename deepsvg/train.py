@@ -85,8 +85,9 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
 
     model = nn.DataParallel(model)
 
-    evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid",
-             stats, 0, 0, summary_writer, visualization_dir)
+    if stats.epoch == 0:
+        evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid", stats, 0, 0, summary_writer,
+                 visualization_dir)
 
     epoch_range = utils.infinite_range(stats.epoch) if cfg.num_epochs is None else range(stats.epoch, cfg.num_epochs)
     for epoch in epoch_range:
@@ -139,17 +140,23 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
                 stats.reset_buffers()
                 summary_writer.flush()
 
-            # if step % cfg.val_every == 0 and step > 0:
-            #     evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid",
-            #              stats, epoch, step, summary_writer, visualization_dir)
+            if step % cfg.val_every == 0 and step > 0:
+                model.eval()
+                with torch.no_grad():
+                    output = None
+                    cfg.visualize(model, output, train_vars, step, epoch, summary_writer, visualization_dir)
+
+                # evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid",
+                #          stats, epoch, step, summary_writer, visualization_dir)
 
             if not debug and step % cfg.ckpt_every == 0 and step > 0:
                 utils.save_ckpt_list(checkpoint_dir, model, cfg, optimizers, scheduler_lrs, scheduler_warmups, stats,
                                      train_vars)
 
-        # Evaluate on the valid split after each epoch
-        evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid",
-                 stats, epoch, step, summary_writer, visualization_dir)
+        # Evaluate on the valid split
+        if epoch % 5 == 0:
+            evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid",
+                     stats, epoch, step, summary_writer, visualization_dir)
 
 
 def evaluate(cfg, model, device, loss_fns, vars, dataloader, split, stats, epoch, step, summary_writer,
