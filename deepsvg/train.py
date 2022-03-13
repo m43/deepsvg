@@ -240,7 +240,7 @@ def _batch_reconstruction_loss_for_svg_sampled_points(model, cfg, batch, show_lo
         model_args = [batch[arg][i].unsqueeze(0).to(device) for arg in cfg.model_args]
         z = model.forward(*model_args, encode_mode=True)
 
-        commands_y, args_y = model.greedy_sample(z=z)
+        commands_y, args_y = model.greedy_sample(*model_args, z=z)
 
         try:
             # prediction points
