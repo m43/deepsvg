@@ -16,7 +16,8 @@ from deepsvg.config import _Config
 from deepsvg.difflib.tensor import SVGTensor
 from deepsvg.svglib.geom import Bbox
 from deepsvg.svglib.svg import SVG
-from deepsvg.utils import Stats, TrainVars, Timer
+from deepsvg.svglib.utils import make_grid
+from deepsvg.utils import Stats, TrainVars, Timer, get_str_formatted_time
 
 
 def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=False, resume=False, eval_only=False):
@@ -88,11 +89,15 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
     model = nn.DataParallel(model)
 
     if eval_only:
-        dataset = ConcatDataset([train_dataset, test_dataset])
-        valid_dataloader = DataLoader(
-            dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
-            num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
+        # dataset = ConcatDataset([train_dataset, test_dataset])
+        # valid_dataloader = DataLoader(
+        #     dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
+        #     num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
+        # evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid", stats, 0, 0, summary_writer,
+        #          visualization_dir)
         evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid", stats, 0, 0, summary_writer,
+                 visualization_dir)
+        evaluate(cfg, model, device, loss_fns, valid_vars, train_dataloader, "train", stats, 0, 0, summary_writer,
                  visualization_dir)
         return
 
@@ -203,7 +208,7 @@ def evaluate(cfg, model, device, loss_fns, vars, dataloader, split, stats, epoch
         else:
             datasets_to_hack = [dataloader.dataset]
         for ds in datasets_to_hack:
-            ds.model_args = list(dataloader.dataset.model_args) + tmp_model_args
+            ds.model_args = list(ds.model_args) + tmp_model_args
 
         loss_dict = reconstruction_loss_for_svg_sampled_points(model.module, cfg, dataloader)
 
@@ -212,7 +217,7 @@ def evaluate(cfg, model, device, loss_fns, vars, dataloader, split, stats, epoch
 
         # TODO hack: remove tmp_model_args
         for ds in datasets_to_hack:
-            ds.model_args = dataloader.dataset.model_args[:-len(tmp_model_args)]
+            ds.model_args = ds.model_args[:-len(tmp_model_args)]
 
     stats.update(split, step, epoch, {
         **weights_dict,
@@ -242,7 +247,8 @@ def reconstruction_loss_for_svg_sampled_points(model, cfg, dataloader, show_logs
     return loss_dict
 
 
-def _batch_reconstruction_loss_for_svg_sampled_points(model, cfg, batch, show_logs=False):
+def _batch_reconstruction_loss_for_svg_sampled_points(model, cfg, batch, show_logs=False,
+                                                      show_logs_images_max_count=None):
     device = next(model.parameters()).device
     commands = batch["commands_grouped"]
     args = batch["args_grouped"]
@@ -277,7 +283,13 @@ def _batch_reconstruction_loss_for_svg_sampled_points(model, cfg, batch, show_lo
             for k in cfg.loss_recon_fn_dict.keys():
                 print(f"LOSS {i:04} {k}:\t{losses[k][-1]}")
 
-            if i < 10:
+            if show_logs_images_max_count is None or i < show_logs_images_max_count:
+                print("TARGET vs PREDICTION")
+                make_grid([
+                    SVG.from_tensor(tensor_target.data, viewbox=Bbox(256)).split_paths().set_color("random")
+                    , SVG.from_tensor(tensor_pred.data, viewbox=Bbox(256)).split_paths().set_color("random")
+                ], num_cols=2, grid_width=256).draw_colored()
+
                 print("TARGET:")
                 SVG.from_tensor(tensor_target.data, viewbox=Bbox(256)).normalize().split_paths().set_color(
                     "random").draw()
@@ -289,6 +301,7 @@ def _batch_reconstruction_loss_for_svg_sampled_points(model, cfg, batch, show_lo
 
 
 if __name__ == "__main__":
+    print(get_str_formatted_time())
     parser = argparse.ArgumentParser(description='DeepSVG Trainer')
     parser.add_argument("--config-module", type=str, required=True)
     parser.add_argument("--log-dir", type=str, default="./logs")
