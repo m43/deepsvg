@@ -7,6 +7,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import tqdm
+from matplotlib import pyplot as plt
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import ConcatDataset
@@ -14,6 +15,7 @@ from torch.utils.data.dataset import ConcatDataset
 from deepsvg import utils
 from deepsvg.config import _Config
 from deepsvg.difflib.tensor import SVGTensor
+from deepsvg.difflib.utils import plot_points
 from deepsvg.svglib.geom import Bbox
 from deepsvg.svglib.svg import SVG
 from deepsvg.svglib.utils import make_grid
@@ -284,11 +286,16 @@ def _batch_reconstruction_loss_for_svg_sampled_points(model, cfg, batch, show_lo
                 print(f"LOSS {i:04} {k}:\t{losses[k][-1]}")
 
             if show_logs_images_max_count is None or i < show_logs_images_max_count:
-                print("TARGET vs PREDICTION")
+                print(f"TARGET points (len={len(points_target)}) vs PREDICTION points (len={len(points_pred)})")
+                points_pred_shifted = torch.stack([points_pred[:, 0] + 256, points_pred[:, 1]], dim=1)
+                plot_points(torch.cat([points_target, points_pred_shifted]), show_color=True)
+                plt.show()
+
+                print(f"TARGET vs PREDICTION with control points")
                 make_grid([
                     SVG.from_tensor(tensor_target.data, viewbox=Bbox(256)).split_paths().set_color("random")
                     , SVG.from_tensor(tensor_pred.data, viewbox=Bbox(256)).split_paths().set_color("random")
-                ], num_cols=2, grid_width=256).draw_colored()
+                ], num_cols=2, grid_width=256).draw_colored(with_points=True)
 
                 print("TARGET:")
                 SVG.from_tensor(tensor_target.data, viewbox=Bbox(256)).normalize().split_paths().set_color(
