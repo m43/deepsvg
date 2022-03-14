@@ -198,7 +198,12 @@ def evaluate(cfg, model, device, loss_fns, vars, dataloader, split, stats, epoch
         # Reconstruction error
         # TODO hack: add temporary model args to dataloader.dataset
         tmp_model_args = ["commands_grouped", "args_grouped"]
-        dataloader.dataset.model_args = list(dataloader.dataset.model_args) + tmp_model_args
+        if type(dataloader.dataset) == ConcatDataset:
+            datasets_to_hack = dataloader.dataset.datasets
+        else:
+            datasets_to_hack = [dataloader.dataset]
+        for ds in datasets_to_hack:
+            ds.model_args = list(dataloader.dataset.model_args) + tmp_model_args
 
         loss_dict = reconstruction_loss_for_svg_sampled_points(model.module, cfg, dataloader)
 
@@ -206,7 +211,8 @@ def evaluate(cfg, model, device, loss_fns, vars, dataloader, split, stats, epoch
         stats.update(split, step, epoch, {**loss_dict})
 
         # TODO hack: remove tmp_model_args
-        dataloader.dataset.model_args = dataloader.dataset.model_args[:-len(tmp_model_args)]
+        for ds in datasets_to_hack:
+            ds.model_args = dataloader.dataset.model_args[:-len(tmp_model_args)]
 
     stats.update(split, step, epoch, {
         **weights_dict,
