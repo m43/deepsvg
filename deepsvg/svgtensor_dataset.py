@@ -85,6 +85,13 @@ class SVGTensorDataset(torch.utils.data.Dataset):
 
         return None
 
+    def get_total_len(self, idx=0, entry=None):
+        if entry is None:
+            entry = self.df.iloc[idx]
+
+        total_len = entry.total_len
+        return torch.tensor(total_len)
+
     def idx_to_id(self, idx):
         return self.df.iloc[idx].id
 
@@ -146,10 +153,11 @@ class SVGTensorDataset(torch.utils.data.Dataset):
             t_sep, fillings = svg.to_tensor(concat_groups=False, PAD_VAL=self.PAD_VAL), svg.to_fillings()
 
         label = self.get_label(idx)
+        total_len = self.get_total_len(idx)
 
-        return self.get_data(t_sep, fillings, model_args=model_args, label=label)
+        return self.get_data(t_sep, fillings, model_args=model_args, label=label, total_len=total_len)
 
-    def get_data(self, t_sep, fillings, model_args=None, label=None):
+    def get_data(self, t_sep, fillings, model_args=None, label=None, total_len=None):
         res = {}
 
         if model_args is None:
@@ -164,7 +172,7 @@ class SVGTensorDataset(torch.utils.data.Dataset):
             seq_len=self.MAX_TOTAL_LEN + 2)]
         t_sep = [SVGTensor.from_data(t, PAD_VAL=self.PAD_VAL, filling=f).add_eos().add_sos().pad(
             seq_len=self.MAX_SEQ_LEN + 2) for
-                 t, f in zip(t_sep, fillings)]
+            t, f in zip(t_sep, fillings)]
 
         for arg in set(model_args):
             if "_grouped" in arg:
@@ -190,6 +198,10 @@ class SVGTensorDataset(torch.utils.data.Dataset):
 
         if "label" in model_args:
             res["label"] = label
+
+        if "total_len" in model_args:
+            assert total_len is not None
+            res["total_len"] = total_len
 
         return res
 
