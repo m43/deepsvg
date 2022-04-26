@@ -171,7 +171,7 @@ class SVG:
             f.write(self.to_str())
 
     def save_png(self, file_path):
-        cairosvg.svg2png(bytestring=self.to_str(), write_to=file_path)
+        cairosvg.svg2png(bytestring=self.to_str(), write_to=file_path, output_width=64, output_height=64)
 
     def draw(self, fill=False, file_path=None, do_display=True, return_png=False,
              with_points=False, with_handles=False, with_bboxes=False, with_markers=False, color_firstlast=False,
@@ -193,13 +193,13 @@ class SVG:
 
         if return_png:
             if file_path is None:
-                img_data = cairosvg.svg2png(bytestring=svg_str)
+                img_data = cairosvg.svg2png(bytestring=svg_str, output_width=64, output_height=64)
                 return Image.open(io.BytesIO(img_data))
             else:
                 _, file_extension = os.path.splitext(file_path)
 
                 if file_extension == ".svg":
-                    img_data = cairosvg.svg2png(url=file_path)
+                    img_data = cairosvg.svg2png(url=file_path, output_width=64, output_height=64)
                     return Image.open(io.BytesIO(img_data))
                 else:
                     return Image.open(file_path)
