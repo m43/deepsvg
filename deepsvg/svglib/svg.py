@@ -4,13 +4,11 @@ import io
 import math
 import os
 import random
-from typing import List, Union
 from xml.dom import expatbuilder
 
 import IPython.display as ipd
 import cairosvg
 import networkx as nx
-import torch
 from PIL import Image
 from moviepy.editor import ImageClip, concatenate_videoclips, ipython_display
 
@@ -270,6 +268,9 @@ class SVG:
 
     def translate(self, vec: Point):
         return self._apply_to_paths("translate", vec)
+
+    def shear(self, angle: Angle):
+        return self._apply_to_paths("shear", angle)
 
     def rotate(self, angle: Angle, center: Point = None):
         if center is None:

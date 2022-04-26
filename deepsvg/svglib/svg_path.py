@@ -2,12 +2,9 @@ from __future__ import annotations
 
 import math
 import re
-from typing import List
 from xml.dom import minidom
 
-import numpy as np
 import shapely.geometry
-import torch
 
 import deepsvg.svglib.geom as geom
 from .geom import *
@@ -206,6 +203,11 @@ class SVGPath:
     def translate(self, vec):
         for geom in self._get_unique_geoms():
             geom.translate(vec)
+        return self
+
+    def shear(self, angle: Angle):
+        for geom in self._get_unique_geoms():
+            geom.shear(angle)
         return self
 
     def rotate(self, angle):

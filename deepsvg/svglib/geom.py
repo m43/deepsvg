@@ -139,6 +139,9 @@ class Point(Geom):
     def translate(self, vec: Point):
         self.pos += vec.pos
 
+    def shear(self, angle: Angle):
+        self.pos += Point(self.y * np.tan(np.deg2rad(angle.deg)), 0).pos
+
     def matmul(self, m):
         return Point(m @ self.pos)
 

@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import re
-from typing import List
 from xml.dom import minidom
 
 import networkx as nx
 import shapely
 import shapely.geometry
 import shapely.ops
-import torch
 
 from .geom import *
 from .svg_command import SVGCommandLine, SVGCommandArc
@@ -314,6 +312,9 @@ class SVGPathGroup(SVGPrimitive):
 
     def translate(self, vec):
         return self._apply_to_paths("translate", vec)
+
+    def shear(self, angle: Angle):
+        return self._apply_to_paths("shear", angle)
 
     def rotate(self, angle: Angle):
         return self._apply_to_paths("rotate", angle)
