@@ -99,6 +99,13 @@ class Config(_Config):
                 "random")
 
             file_path = os.path.join(visualization_dir, f"{split}_reconstructions__i={i}_step={step:06d}.png")
-            img = make_grid([svg_path_sample, svg_path_gt]).draw(file_path=file_path, do_display=False, return_png=True,
-                                                                 fill=False, with_points=False)
+            img = make_grid([svg_path_sample, svg_path_gt], num_cols=2).draw(
+                file_path=file_path,
+                do_display=False,
+                return_png=True,
+                fill=False,
+                with_points=False,
+                output_width=512,
+                output_height=512,
+            )
             summary_writer.add_image(f"reconstructions_{split}/{i}", TF.to_tensor(img), step)
