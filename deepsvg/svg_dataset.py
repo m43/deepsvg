@@ -17,7 +17,7 @@ Num = Union[int, float]
 
 class SVGDataset(torch.utils.data.Dataset):
     def __init__(self, df, data_dir, model_args, max_num_groups, max_seq_len, max_total_len=None,
-                 pad_val=-1, nb_augmentations=1, already_preprocessed=True):
+                 pad_val=-1, random_aug=True, nb_augmentations=1, already_preprocessed=True):
         self.df = df
         self.data_dir = data_dir
 
@@ -34,6 +34,7 @@ class SVGDataset(torch.utils.data.Dataset):
 
         self.PAD_VAL = pad_val
 
+        self.random_aug = random_aug
         self.nb_augmentations = nb_augmentations
 
     def search_name(self, name):
@@ -141,7 +142,10 @@ class SVGDataset(torch.utils.data.Dataset):
             return svg.numericalize(256)
         return svg
 
-    def get(self, idx=0, model_args=None, random_aug=True, id=None, svg: SVG = None):
+    def get(self, idx=0, model_args=None, random_aug=None, id=None, svg: SVG = None):
+        if random_aug is None:
+            random_aug = self.random_aug
+
         if id is None:
             idx = idx % len(self.df)
             id = self.idx_to_id(idx)
@@ -151,36 +155,58 @@ class SVGDataset(torch.utils.data.Dataset):
 
             svg = SVGDataset.preprocess(svg, augment=random_aug)
 
-        t_sep, fillings = svg.to_tensor(concat_groups=False, PAD_VAL=self.PAD_VAL), svg.to_fillings()
+        tensors_separately, fillings = svg.to_tensor(concat_groups=False, PAD_VAL=self.PAD_VAL), svg.to_fillings()
 
         label = self.get_label(idx)
 
-        return self.get_data(t_sep, fillings, model_args=model_args, label=label)
+        return self.get_data(tensors_separately, fillings, model_args=model_args, label=label)
 
-    def get_data(self, t_sep, fillings, model_args=None, label=None):
-        res = {}
-
+    def get_data(self, tensors_separately, fillings, model_args=None, label=None):
         if model_args is None:
             model_args = self.model_args
+        return SVGDataset.tensors_to_model_inputs(
+            tensors_separately=tensors_separately,
+            fillings=fillings,
+            max_num_groups=self.MAX_NUM_GROUPS,
+            max_seq_len=self.MAX_SEQ_LEN,
+            max_total_len=self.MAX_TOTAL_LEN,
+            pad_val=self.PAD_VAL,
+            model_args=model_args,
+            label=label,
+        )
 
-        pad_len = max(self.MAX_NUM_GROUPS - len(t_sep), 0)
+    @staticmethod
+    def tensors_to_model_inputs(
+            tensors_separately,
+            fillings,
+            max_num_groups,
+            max_seq_len,
+            max_total_len,
+            pad_val,
+            model_args,
+            label=None
+    ):
+        res = {}
 
-        t_sep.extend([torch.empty(0, 14)] * pad_len)
+        pad_len = max(max_num_groups - len(tensors_separately), 0)
+        tensors_separately.extend([torch.empty(0, 14)] * pad_len)
         fillings.extend([0] * pad_len)
 
-        t_grouped = [SVGTensor.from_data(torch.cat(t_sep, dim=0), PAD_VAL=self.PAD_VAL).add_eos().add_sos().pad(
-            seq_len=self.MAX_TOTAL_LEN + 2)]
-        t_sep = [SVGTensor.from_data(t, PAD_VAL=self.PAD_VAL, filling=f).add_eos().add_sos().pad(
-            seq_len=self.MAX_SEQ_LEN + 2) for
-            t, f in zip(t_sep, fillings)]
+        tensors_grouped = [
+            SVGTensor.from_data(torch.cat(tensors_separately, dim=0), PAD_VAL=pad_val).add_eos().add_sos().pad(
+                seq_len=max_total_len + 2)]
+
+        tensors_separately = [SVGTensor.from_data(t, PAD_VAL=pad_val, filling=f).add_eos().add_sos().pad(
+            seq_len=max_seq_len + 2) for
+            t, f in zip(tensors_separately, fillings)]
 
         for arg in set(model_args):
             if "_grouped" in arg:
                 arg_ = arg.split("_grouped")[0]
-                t_list = t_grouped
+                t_list = tensors_grouped
             else:
                 arg_ = arg
-                t_list = t_sep
+                t_list = tensors_separately
 
             if arg_ == "tensor":
                 res[arg] = t_list
@@ -194,7 +220,7 @@ class SVGDataset(torch.utils.data.Dataset):
                 res[arg] = torch.stack([t.args() for t in t_list])
 
         if "filling" in model_args:
-            res["filling"] = torch.stack([torch.tensor(t.filling) for t in t_sep]).unsqueeze(-1)
+            res["filling"] = torch.stack([torch.tensor(t.filling) for t in tensors_separately]).unsqueeze(-1)
 
         if "label" in model_args:
             res["label"] = label
