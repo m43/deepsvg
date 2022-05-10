@@ -52,6 +52,7 @@ class _Config:
         self.stats_to_print = {
             "train": ["lr", "time"],
             "valid": [],
+            "test": []
         }
 
         self.model_args = []  #

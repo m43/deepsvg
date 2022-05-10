@@ -121,7 +121,7 @@ class Stats:
 
             s = "[{}/{}, {:.1f}%] eta: {}, ".format(self.step, self.num_steps, completion_pct, eta_string)
         else:
-            s = f"[Validation, epoch {self.epoch + 1}] "
+            s = f"[{split.upper()}, epoch {self.epoch + 1}] "
 
         return s + ", ".join(
             f"{stat}: {self.stats[split].get(stat).median():.4f}" for stat in self.stats_to_print[split])

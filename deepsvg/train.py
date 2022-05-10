@@ -1,14 +1,20 @@
 import argparse
 import importlib
+import io
 import os
 from collections import defaultdict
 
+import cairosvg
+import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+import torchvision
 import tqdm
+from PIL import Image
 from matplotlib import pyplot as plt
 from tensorboardX import SummaryWriter
+from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import ConcatDataset
 
@@ -20,22 +26,53 @@ from deepsvg.svglib.geom import Bbox
 from deepsvg.svglib.svg import SVG
 from deepsvg.svglib.utils import make_grid
 from deepsvg.utils import Stats, TrainVars, Timer, get_str_formatted_time
+from deepsvg.utils.stats import MetricTracker
 
 
-def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=False, resume=False, eval_only=False):
+def train(
+        cfg: _Config,
+        model_name,
+        experiment_name="",
+        log_dir="./logs",
+        debug=False,
+        resume=False,
+        eval_only=False,
+        eval_l1_loss=True,
+        eval_l1_loss_viewbox=24,
+):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
     print("Parameters")
     cfg.print_params()
+    print("Model Configuration:")
+    for key in dir(cfg.model_cfg):
+        if not key.startswith("__") and not callable(getattr(cfg.model_cfg, key)):
+            print(f"  {key} = {getattr(cfg.model_cfg, key)}")
 
     print("Loading dataset")
     dataset_load_function = importlib.import_module(cfg.dataloader_module).load_dataset
-    train_dataset, test_dataset = dataset_load_function(cfg)
+    dataset_subsets = dataset_load_function(cfg)
+    if len(dataset_subsets) == 2:
+        train_dataset, valid_dataset = dataset_subsets
+        test_dataset = None
+    elif len(dataset_subsets) == 3:
+        train_dataset, valid_dataset, test_dataset = dataset_subsets
+    else:
+        raise RuntimeError(f"dataloader_module should return either 2 or 3 subsets,"
+                           f"but got {len(dataset_subsets)} subsets")
+    print(f"len(train_dataset)={len(train_dataset)}")
+    print(f"len(valid_dataset)={len(valid_dataset)}")
+    if test_dataset is not None:
+        print(f"len(test_dataset)={len(test_dataset)}")
+
     train_dataloader = DataLoader(train_dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
                                   num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
-    valid_dataloader = DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
+    valid_dataloader = DataLoader(valid_dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
                                   num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
+    if test_dataset is not None:
+        test_dataloader = DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
+                                     num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
 
     model = cfg.make_model().to(device)
     if cfg.pretrained_path is not None:
@@ -46,6 +83,7 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
                   stats_to_print=cfg.stats_to_print)
     train_vars = TrainVars()
     valid_vars = TrainVars()
+    test_vars = TrainVars()
     timer = Timer()
 
     stats.num_parameters = utils.count_parameters(model)
@@ -63,6 +101,7 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
 
     cfg.set_train_vars(train_vars, train_dataloader)
     cfg.set_train_vars(valid_vars, valid_dataloader)
+    cfg.set_train_vars(test_vars, test_dataloader)
 
     # Optimizer, lr & warmup schedulers
     optimizers = cfg.make_optimizers(model)
@@ -70,10 +109,14 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
     scheduler_warmups = cfg.make_warmup_schedulers(optimizers, scheduler_lrs)
 
     loss_fns = [l.to(device) for l in cfg.make_losses()]
-
     if resume:
         ckpt_exists = utils.load_ckpt_list(checkpoint_dir, model, device, None, optimizers, scheduler_lrs,
                                            scheduler_warmups, stats, train_vars)
+        # Hack to include the additional stats that were not saved in the checkpoint
+        for split in cfg.stats_to_print.keys():
+            if split not in stats.stats_to_print:
+                stats.stats[split] = defaultdict(MetricTracker)
+                stats.stats_to_print[split] = set()
 
     if resume and ckpt_exists:
         print(f"Resuming model at epoch {stats.epoch + 1}")
@@ -91,21 +134,27 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
     model = nn.DataParallel(model)
 
     if eval_only:
-        # dataset = ConcatDataset([train_dataset, test_dataset])
+        # dataset = ConcatDataset([train_dataset, valid_dataset])
         # valid_dataloader = DataLoader(
         #     dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
         #     num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
         # evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid", stats, 0, 0, summary_writer,
         #          visualization_dir)
+        if test_dataset is not None:
+            evaluate(cfg, model, device, loss_fns, valid_vars, test_dataloader, "test", stats, 0, 0, summary_writer,
+                     visualization_dir, eval_l1_loss, eval_l1_loss_viewbox)
+            summary_writer.flush()
         evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid", stats, 0, 0, summary_writer,
-                 visualization_dir)
+                 visualization_dir, eval_l1_loss, eval_l1_loss_viewbox)
+        summary_writer.flush()
         evaluate(cfg, model, device, loss_fns, valid_vars, train_dataloader, "train", stats, 0, 0, summary_writer,
-                 visualization_dir)
+                 visualization_dir, eval_l1_loss, eval_l1_loss_viewbox)
+        summary_writer.flush()
         return
 
     if stats.epoch == 0:
         evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid", stats, 0, 0, summary_writer,
-                 visualization_dir)
+                 visualization_dir, eval_l1_loss, eval_l1_loss_viewbox, eval_number_of_batches=3)
 
     epoch_range = utils.infinite_range(stats.epoch) if cfg.num_epochs is None else range(stats.epoch, cfg.num_epochs)
     for epoch in epoch_range:
@@ -172,14 +221,24 @@ def train(cfg: _Config, model_name, experiment_name="", log_dir="./logs", debug=
                                      train_vars)
 
         # Evaluate on the valid split
-        if epoch % 5 == 0:
-            evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid",
-                     stats, epoch, step, summary_writer, visualization_dir)
+        if (epoch + 1) % 50 == 0:
+            print(step)
+            evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid", stats, epoch, step,
+                     summary_writer, visualization_dir, eval_l1_loss, eval_l1_loss_viewbox)
+
+    if test_dataset is not None:
+        # TODO possibly add early stopping and then load the best model here
+        print("Test set evaluated with last (not best) checkpoint!")
+        evaluate(cfg, model, device, loss_fns, test_vars, test_dataloader, "test", stats, 0, 0, summary_writer,
+                 visualization_dir, eval_l1_loss, eval_l1_loss_viewbox)
+        print("Train set evaluated with last (not best) checkpoint!")
+        evaluate(cfg, model, device, loss_fns, train_vars, train_dataloader, "train", stats, 0, 0, summary_writer,
+                 visualization_dir, eval_l1_loss, eval_l1_loss_viewbox)
 
 
-def evaluate(cfg, model, device, loss_fns, vars, dataloader, split, stats, epoch, step, summary_writer,
-             visualization_dir):
-    print(f"Evaluate on: {split}")
+def evaluate(cfg, model, device, loss_fns, vars, dataloader, subset, stats, epoch, step, summary_writer,
+             visualization_dir, eval_l1_loss, eval_l1_loss_viewbox, eval_number_of_batches=-1):
+    print(f"Evaluate on: {subset}")
     if len(dataloader) == 0:
         print("len(dataloader)=0")
         return
@@ -187,20 +246,9 @@ def evaluate(cfg, model, device, loss_fns, vars, dataloader, split, stats, epoch
     timer = Timer()
     model.eval()
     with torch.no_grad():
-        for data in tqdm.tqdm(dataloader):
-            model_args = [data[arg].to(device) for arg in cfg.model_args]
-            labels = data["label"].to(device) if "label" in data else None
-            params_dict, weights_dict = cfg.get_params(step, epoch), cfg.get_weights(step, epoch)
-
-            for i, loss_fn in enumerate(loss_fns, 1):
-                output = model(*model_args, params=params_dict)
-                loss_dict = loss_fn(output, labels, weights=weights_dict)
-                stats.update_stats_to_print(split, loss_dict.keys())
-                stats.update(split, step, epoch, {**loss_dict})
-
         # Visualization
         output = None
-        cfg.visualize(model, output, vars, step, epoch, summary_writer, visualization_dir, split)
+        cfg.visualize(model, output, vars, step, epoch, summary_writer, visualization_dir, subset)
 
         # Reconstruction error
         # TODO hack: add temporary model args to dataloader.dataset
@@ -211,32 +259,68 @@ def evaluate(cfg, model, device, loss_fns, vars, dataloader, split, stats, epoch
             datasets_to_hack = [dataloader.dataset]
         for ds in datasets_to_hack:
             ds.model_args = list(ds.model_args) + tmp_model_args
-
-        loss_dict = reconstruction_loss_for_svg_sampled_points(model.module, cfg, dataloader)
-
-        stats.update_stats_to_print(split, loss_dict.keys())
-        stats.update(split, step, epoch, {**loss_dict})
+        loss_dict = reconstruction_loss_for_svg_sampled_points(
+            step=step,
+            subset=subset,
+            model=model.module,
+            cfg=cfg,
+            dataloader=dataloader,
+            summary_writer=summary_writer,
+            eval_l1_loss=eval_l1_loss,
+            eval_number_of_batches=eval_number_of_batches,
+            eval_l1_loss_viewbox=eval_l1_loss_viewbox,
+        )
+        stats.update_stats_to_print(subset, loss_dict.keys())
+        stats.update(subset, step, epoch, {**loss_dict})
 
         # TODO hack: remove tmp_model_args
         for ds in datasets_to_hack:
             ds.model_args = ds.model_args[:-len(tmp_model_args)]
 
-    stats.update(split, step, epoch, {
+        for batch_idx, data in enumerate(tqdm.tqdm(dataloader)):
+            if batch_idx == eval_number_of_batches:
+                break
+            model_args = [data[arg].to(device) for arg in cfg.model_args]
+            labels = data["label"].to(device) if "label" in data else None
+            params_dict, weights_dict = cfg.get_params(step, epoch), cfg.get_weights(step, epoch)
+
+            for i, loss_fn in enumerate(loss_fns, 1):
+                output = model(*model_args, params=params_dict)
+                loss_dict = loss_fn(output, labels, weights=weights_dict)
+                stats.update_stats_to_print(subset, loss_dict.keys())
+                stats.update(subset, step, epoch, {**loss_dict})
+
+    stats.update(subset, step, epoch, {
         **weights_dict,
         "time": timer.get_elapsed_time()
     })
 
-    print(stats.get_summary(split))
-    stats.write_tensorboard(summary_writer, split)
+    print(stats.get_summary(subset))
+    stats.write_tensorboard(summary_writer, subset)
     stats.reset_buffers()
     summary_writer.flush()
 
 
-def reconstruction_loss_for_svg_sampled_points(model, cfg, dataloader, show_logs=False):
+def reconstruction_loss_for_svg_sampled_points(step, subset, model, cfg, dataloader, summary_writer,
+                                               show_logs=False, eval_l1_loss=True, eval_number_of_batches=-1,
+                                               eval_l1_loss_viewbox=24):
     losses_dict = defaultdict(list)
     with torch.no_grad():
-        for data in tqdm.tqdm(dataloader):
-            res = _batch_reconstruction_loss_for_svg_sampled_points(model, cfg, data, show_logs)
+        for batch_idx, data in enumerate(tqdm.tqdm(dataloader)):
+            if batch_idx == eval_number_of_batches:
+                break
+            res = _batch_reconstruction_loss_for_svg_sampled_points(
+                step=step,
+                batch_idx=batch_idx,
+                subset=subset,
+                model=model,
+                cfg=cfg,
+                batch=data,
+                summary_writer=summary_writer,
+                show_logs=show_logs,
+                eval_l1_loss=eval_l1_loss,
+                eval_l1_loss_viewbox=eval_l1_loss_viewbox,
+            )
             for k, v in res.items():
                 losses_dict[k].extend(v)
 
@@ -249,13 +333,28 @@ def reconstruction_loss_for_svg_sampled_points(model, cfg, dataloader, show_logs
     return loss_dict
 
 
-def _batch_reconstruction_loss_for_svg_sampled_points(model, cfg, batch, show_logs=False,
-                                                      show_logs_images_max_count=None):
+def _batch_reconstruction_loss_for_svg_sampled_points(
+        step,
+        batch_idx,
+        subset,
+        model,
+        cfg,
+        batch,
+        summary_writer,
+        show_logs=False,
+        show_logs_images_max_count=None,
+        eval_l1_loss=True,
+        eval_l1_loss_resolutions=(64, 128, 256, 512),
+        eval_l1_loss_viewbox=24,
+):
     device = next(model.parameters()).device
     commands = batch["commands_grouped"]
     args = batch["args_grouped"]
     losses = defaultdict(list)
-    for i, (c, a) in enumerate(zip(commands, args)):  # TODO slow, but not possible to work with batches at the moment
+    n_log_images_in_grid = 8
+    log_images = defaultdict(list)
+    for i, (c, a) in enumerate(zip(commands, args)):
+        # TODO slow, but not possible to work with batches at the moment
         # target points
         tensor_target = SVGTensor.from_cmd_args(c[0], a[0]).copy().unpad().drop_sos()  # TODO copy problems with device
         points_target = tensor_target.sample_points(n=cfg.n_recon_points)
@@ -270,13 +369,15 @@ def _batch_reconstruction_loss_for_svg_sampled_points(model, cfg, batch, show_lo
             # prediction points
             tensor_pred = SVGTensor.from_cmd_args(commands_y[0], args_y[0])
             points_pred = tensor_pred.sample_points(n=cfg.n_recon_points)
+            points_target = points_target.to(points_pred.device)
         except Exception as e:
             # print(f"TRY-CATCH, caught exception: {e}")
             continue
 
-        points_target = points_target.to(points_pred.device)
+        svg_target = SVG.from_tensor(tensor_target.data, viewbox=Bbox(256)).split_paths()
+        svg_pred = SVG.from_tensor(tensor_pred.data, viewbox=Bbox(256)).split_paths()
 
-        # reconstruction loss
+        # pointcloud reconstruction loss
         for k, loss_recon_fn in cfg.loss_recon_fn_dict.items():
             losses[k].append(loss_recon_fn(points_pred / 256, points_target / 256).item())
 
@@ -293,18 +394,77 @@ def _batch_reconstruction_loss_for_svg_sampled_points(model, cfg, batch, show_lo
 
                 print(f"TARGET vs PREDICTION with control points")
                 make_grid([
-                    SVG.from_tensor(tensor_target.data, viewbox=Bbox(256)).split_paths().set_color("random")
-                    , SVG.from_tensor(tensor_pred.data, viewbox=Bbox(256)).split_paths().set_color("random")
+                    svg_target.set_color("random"),
+                    svg_pred.set_color("random"),
                 ], num_cols=2, grid_width=256).draw_colored(with_points=True)
 
                 print("TARGET:")
-                SVG.from_tensor(tensor_target.data, viewbox=Bbox(256)).normalize().split_paths().set_color(
-                    "random").draw()
+                svg_target.normalize().set_color("random").draw()
                 print("PREDICTION:")
-                SVG.from_tensor(tensor_pred.data, viewbox=Bbox(256)).normalize().split_paths().set_color(
-                    "random").draw()
+                svg_pred.normalize().set_color("random").draw()
+
+        # raster reconstruction loss
+        if eval_l1_loss:
+            svg_target.normalize(Bbox(eval_l1_loss_viewbox))
+            svg_pred.normalize(Bbox(eval_l1_loss_viewbox))
+            for res in eval_l1_loss_resolutions:
+                rendered_image_pred = svgtensor_to_img(svg_pred, res, res)
+                rendered_image_target = svgtensor_to_img(svg_target, res, res)
+                l1_loss = F.l1_loss(rendered_image_pred, rendered_image_target)
+                losses[f'Images/{subset}/{res}x{res}/l1loss_viewbox={eval_l1_loss_viewbox}'].append(l1_loss.item())
+                if i < n_log_images_in_grid:
+                    log_images[res].append((rendered_image_pred[:, None], rendered_image_target[:, None]))
+
+    if eval_l1_loss and batch_idx % 50 == 0:
+        n_columns = int((n_log_images_in_grid * 2) ** 0.5)
+        for res in eval_l1_loss_resolutions:
+            if len(log_images[res]) == 0:
+                continue
+            zipped = torch.concat(
+                list(
+                    map(
+                        torch.cat,
+                        log_images[res]
+                    )
+                )
+            )
+            zipped_image = torchvision.utils.make_grid(zipped, nrow=n_columns)
+            summary_writer.add_image(
+                f'Images/{subset}/{res}x{res}/l1loss-{batch_idx}-img',
+                zipped_image,
+                step
+            )
 
     return losses
+
+
+def svgtensor_to_img(svg, output_width=64, output_height=64):
+    pil_image = draw_svgtensor(svg, output_width, output_height)
+    return torch.tensor(np.array(pil_image).transpose(2, 0, 1)[-1:]) / 255.
+
+
+def draw_svgtensor(
+        svg,
+        output_width,
+        output_height,
+        fill=False,
+        with_points=False,
+        with_handles=False,
+        with_bboxes=False,
+        with_markers=False,
+        color_firstlast=False,
+        with_moves=True,
+):
+    svg_str = svg.to_str(fill=fill, with_points=with_points, with_handles=with_handles, with_bboxes=with_bboxes,
+                         with_markers=with_markers, color_firstlast=color_firstlast, with_moves=with_moves)
+
+    img_data = cairosvg.svg2png(
+        bytestring=svg_str,
+        invert_images=True,
+        output_width=output_width,
+        output_height=output_height,
+    )
+    return Image.open(io.BytesIO(img_data))
 
 
 if __name__ == "__main__":
