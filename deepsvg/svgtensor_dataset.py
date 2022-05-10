@@ -7,7 +7,6 @@ from typing import List, Union
 import pandas as pd
 import torch
 import torch.utils.data
-from sklearn.model_selection import train_test_split
 
 from deepsvg.config import _Config
 from deepsvg.difflib.tensor import SVGTensor
@@ -246,6 +245,9 @@ def load_dataset(cfg: _Config, _seed=72):
         if cfg.max_total_len is not None:
             df = df[df.total_len <= cfg.max_total_len]
 
+    # TODO
+    # raise Exception("sklearn train_test_split uses too much virtual memory")
+    from sklearn.model_selection import train_test_split
     train_df, valid_df = train_test_split(df, train_size=cfg.train_ratio, random_state=_seed)
     train_dataset = SVGTensorDataset(train_df, cfg.data_dir, cfg.model_args,
                                      cfg.max_num_groups, cfg.max_seq_len, cfg.max_total_len)
@@ -254,6 +256,15 @@ def load_dataset(cfg: _Config, _seed=72):
 
     print(f"\nNumber of train SVGs: {len(train_df)}")
     print(f"First SVG in train:\n{train_df.iloc[0]}\n")
-    print(f"Number of test SVGs: {len(valid_df)}")
-    print(f"First SVG in test:\n{valid_df.iloc[0]}\n")
+    print(f"len(train_dataset)={len(train_dataset)}\n")
+    print(f"train_dataset.nb_augmentations={train_dataset.nb_augmentations}\n")
+    print(f"Number of valid SVGs: {len(valid_df)}")
+    print(f"First SVG in valid:\n{valid_df.iloc[0]}\n")
+    print(f"len(valid_dataset)={len(valid_dataset)}\n")
+    print(f"valid_dataset.nb_augmentations={train_dataset.nb_augmentations}\n")
+    print(f"No test set\n")
     return train_dataset, valid_dataset
+
+
+if __name__ == '__main__':
+    pass

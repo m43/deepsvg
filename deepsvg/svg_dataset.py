@@ -5,7 +5,6 @@ from typing import Union
 import pandas as pd
 import torch
 import torch.utils.data
-from sklearn.model_selection import train_test_split
 
 from deepsvg.config import _Config
 from deepsvg.difflib.tensor import SVGTensor
@@ -247,6 +246,9 @@ def load_dataset(cfg: _Config, already_preprocessed=True, _seed=72):
         if cfg.max_total_len is not None:
             df = df[df.total_len <= cfg.max_total_len]
 
+    # TODO
+    # raise Exception("sklearn train_test_split uses too much virtual memory")
+    from sklearn.model_selection import train_test_split
     train_df, valid_df = train_test_split(df, train_size=cfg.train_ratio, random_state=_seed)
     train_dataset = SVGDataset(train_df, cfg.data_dir, cfg.model_args, cfg.max_num_groups, cfg.max_seq_len,
                                cfg.max_total_len, nb_augmentations=cfg.nb_augmentations,

@@ -10,7 +10,6 @@ import IPython.display as ipd
 import cairosvg
 import networkx as nx
 from PIL import Image
-from moviepy.editor import ImageClip, concatenate_videoclips, ipython_display
 
 from .geom import *
 
@@ -382,6 +381,8 @@ class SVG:
         return clips
 
     def animate(self, file_path=None, frame_duration=0.1, do_display=True):
+        from moviepy.editor import ImageClip, concatenate_videoclips, ipython_display
+
         clips = self.to_video(lambda img: ImageClip(img).set_duration(frame_duration))
 
         clip = concatenate_videoclips(clips, method="compose", bg_color=(255, 255, 255))

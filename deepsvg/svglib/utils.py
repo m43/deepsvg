@@ -2,7 +2,6 @@ import math
 
 import IPython.display as ipd
 import numpy as np
-from moviepy.editor import ImageClip, concatenate_videoclips, ipython_display
 
 import deepsvg.svglib.svg as svg_lib
 from .geom import Bbox, Point
@@ -80,6 +79,8 @@ COLORS = ["aliceblue", "antiquewhite", "aqua", "aquamarine", "azure", "beige", "
 
 
 def to_gif(img_list, file_path=None, frame_duration=0.1, do_display=True):
+    from moviepy.editor import ImageClip, concatenate_videoclips, ipython_display
+
     clips = [ImageClip(np.array(img)).set_duration(frame_duration) for img in img_list]
 
     clip = concatenate_videoclips(clips, method="compose", bg_color=(255, 255, 255))
