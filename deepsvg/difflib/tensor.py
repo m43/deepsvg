@@ -79,6 +79,9 @@ class SVGTensor:
     def start_pos(self):
         start_pos = self.end_pos[:-1]
 
+        if len(self.end_pos) == 0:
+            return start_pos.new_zeros(0, 2)
+
         return torch.cat([
             start_pos.new_zeros(1, 2),
             start_pos
