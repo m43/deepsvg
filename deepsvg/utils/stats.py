@@ -126,11 +126,19 @@ class Stats:
         return s + ", ".join(
             f"{stat}: {self.stats[split].get(stat).median():.4f}" for stat in self.stats_to_print[split])
 
-    def write_tensorboard(self, summary_writer, split):
+    def write_tensorboard(self, summary_writer, split, reset_buffers_after_write=True):
+        print(f"Writing split={split} to tensorboard. reset_buffers={reset_buffers_after_write}. step={self.step}")
         summary_writer.add_scalar(f"epoch/{split}", self.epoch + 1, self.step)
 
         for stat in self.stats_to_print[split]:
-            summary_writer.add_scalar(f"{stat}/{split}", self.stats[split].get(stat).median(), self.step)
+            summary_writer.add_scalar(
+                f"{stat}" if split in stat else f"{split}_{stat}",
+                self.stats[split].get(stat).median(),
+                self.step,
+            )
+
+        if reset_buffers_after_write:
+            self.reset_buffers()
 
     def is_best(self):
         return True
