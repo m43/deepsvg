@@ -101,7 +101,8 @@ def train(
 
     cfg.set_train_vars(train_vars, train_dataloader)
     cfg.set_train_vars(valid_vars, valid_dataloader)
-    cfg.set_train_vars(test_vars, test_dataloader)
+    if test_dataset is not None:
+        cfg.set_train_vars(test_vars, test_dataloader)
 
     # Optimizer, lr & warmup schedulers
     optimizers = cfg.make_optimizers(model)
