@@ -134,12 +134,6 @@ def train(
     model = nn.DataParallel(model)
 
     if eval_only:
-        # dataset = ConcatDataset([train_dataset, valid_dataset])
-        # valid_dataloader = DataLoader(
-        #     dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
-        #     num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
-        # evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid", stats, 0, 0, summary_writer,
-        #          visualization_dir)
         if test_dataset is not None:
             evaluate(cfg, model, device, loss_fns, valid_vars, test_dataloader, "test", stats, 0, 0, summary_writer,
                      visualization_dir, eval_l1_loss, eval_l1_loss_viewbox)
@@ -216,13 +210,15 @@ def train(
                 # evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid",
                 #          stats, epoch, step, summary_writer, visualization_dir)
 
-            if not debug and step % cfg.ckpt_every == 0 and step > 0:
-                utils.save_ckpt_list(checkpoint_dir, model, cfg, optimizers, scheduler_lrs, scheduler_warmups, stats,
-                                     train_vars)
+            # if not debug and step % cfg.ckpt_every == 0 and step > 0:
+            #     utils.save_ckpt_list(checkpoint_dir, model, cfg, optimizers, scheduler_lrs, scheduler_warmups, stats,
+            #                          train_vars)
 
         # Evaluate on the valid split
-        if (epoch + 1) % 50 == 0:
-            print(step)
+        if (epoch + 1) % 5 == 0:
+            print(f"evaluate on valid, step={step}")
+            utils.save_ckpt_list(checkpoint_dir, model, cfg, optimizers, scheduler_lrs, scheduler_warmups, stats,
+                                 train_vars)
             evaluate(cfg, model, device, loss_fns, valid_vars, valid_dataloader, "valid", stats, epoch, step,
                      summary_writer, visualization_dir, eval_l1_loss, eval_l1_loss_viewbox)
 
@@ -344,7 +340,7 @@ def _batch_reconstruction_loss_for_svg_sampled_points(
         show_logs=False,
         show_logs_images_max_count=None,
         eval_l1_loss=True,
-        eval_l1_loss_resolutions=(64, 128, 256, 512),
+        eval_l1_loss_resolutions=(128,),  # (64, 128, 256, 512),
         eval_l1_loss_viewbox=24,
 ):
     device = next(model.parameters()).device
@@ -379,7 +375,7 @@ def _batch_reconstruction_loss_for_svg_sampled_points(
 
         # pointcloud reconstruction loss
         for k, loss_recon_fn in cfg.loss_recon_fn_dict.items():
-            losses[k].append(loss_recon_fn(points_pred / 256, points_target / 256).item())
+            losses[f"loss_reconstruction/{k}"].append(loss_recon_fn(points_pred / 256, points_target / 256).item())
 
         if show_logs:
             print(f"Reconstruction losses")
@@ -411,7 +407,7 @@ def _batch_reconstruction_loss_for_svg_sampled_points(
                 rendered_image_pred = svgtensor_to_img(svg_pred, res, res)
                 rendered_image_target = svgtensor_to_img(svg_target, res, res)
                 l1_loss = F.l1_loss(rendered_image_pred, rendered_image_target)
-                losses[f'Images/{subset}/{res}x{res}/l1loss_viewbox={eval_l1_loss_viewbox}'].append(l1_loss.item())
+                losses[f'loss_images_{subset}_{res}x{res}_l1loss_viewbox={eval_l1_loss_viewbox}'].append(l1_loss.item())
                 if i < n_log_images_in_grid:
                     log_images[res].append((rendered_image_pred[:, None], rendered_image_target[:, None]))
 
@@ -430,7 +426,7 @@ def _batch_reconstruction_loss_for_svg_sampled_points(
             )
             zipped_image = torchvision.utils.make_grid(zipped, nrow=n_columns)
             summary_writer.add_image(
-                f'Images/{subset}/{res}x{res}/l1loss-{batch_idx}-img',
+                f'Images_{subset}_{res}x{res}/l1loss-{batch_idx}-img',
                 zipped_image,
                 step
             )
