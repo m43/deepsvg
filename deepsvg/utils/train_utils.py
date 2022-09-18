@@ -249,7 +249,7 @@ class Object(object):
 
 
 def get_str_formatted_time() -> str:
-    return datetime.now().strftime('%Y.%m.%d_%H.%M.%S')
+    return datetime.now().strftime('%Y.%m.%d_%H.%M.%S_%f')
 
 
 def ensure_dir(dirname):

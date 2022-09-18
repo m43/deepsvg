@@ -33,6 +33,7 @@ def train(
         cfg: _Config,
         model_name,
         experiment_name="",
+        experiment_identifier=None,
         log_dir="./logs",
         debug=False,
         resume=False,
@@ -68,10 +69,10 @@ def train(
 
     train_dataloader = DataLoader(train_dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
                                   num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
+    valid_dataloader = DataLoader(valid_dataset, batch_size=cfg.batch_size, shuffle=False, drop_last=True,
                                   num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
     if test_dataset is not None:
-        test_dataloader = DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
+        test_dataloader = DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=False, drop_last=True,
                                      num_workers=cfg.loader_num_workers, collate_fn=cfg.collate_fn)
 
     model = cfg.make_model().to(device)
@@ -91,13 +92,21 @@ def train(
 
     # Summary Writer
     current_time = utils.get_str_formatted_time()
-    experiment_identifier = f"{model_name}__{experiment_name}__{current_time}"
+    if experiment_identifier is None:
+        experiment_identifier = f"{model_name}__{experiment_name}__{current_time}"
 
     summary_writer = SummaryWriter(
         os.path.join(log_dir, "tensorboard", "debug" if debug else "full", experiment_identifier))
-    checkpoint_dir = os.path.join(log_dir, "models", model_name, experiment_name)
-    visualization_dir = os.path.join(log_dir, "visualization", model_name, experiment_name)
+    checkpoint_dir = os.path.join(log_dir, "models", model_name, experiment_identifier)
+    visualization_dir = os.path.join(log_dir, "visualization", model_name, experiment_identifier)
     utils.ensure_dir(visualization_dir)
+
+    print("-" * 72)
+    print(f"experiment_identifier={experiment_identifier}")
+    print(f"summary_writer.logdir={summary_writer.logdir}")
+    print(f"checkpoint_dir={checkpoint_dir}")
+    print(f"visualization_dir={visualization_dir}")
+    print("-" * 72)
 
     cfg.set_train_vars(train_vars, train_dataloader)
     cfg.set_train_vars(valid_vars, valid_dataloader)
@@ -118,11 +127,12 @@ def train(
             if split not in stats.stats_to_print:
                 stats.stats[split] = defaultdict(MetricTracker)
                 stats.stats_to_print[split] = set()
-
-    if resume and ckpt_exists:
-        print(f"Resuming model at epoch {stats.epoch + 1}")
-        stats.num_steps = cfg.num_epochs * len(train_dataloader)
-        stats.reset_stats_to_print()
+        if ckpt_exists:
+            print(f"Resuming model at epoch {stats.epoch + 1}")
+            stats.num_steps = cfg.num_epochs * len(train_dataloader)
+            stats.reset_stats_to_print()
+        else:
+            print(f"Could not resume from checkpoint_dir={checkpoint_dir}")
     else:
         # Run a single forward pass on the single-device model for initialization of some modules
         single_foward_dataloader = DataLoader(train_dataset, batch_size=cfg.batch_size // cfg.num_gpus, shuffle=True,
@@ -228,9 +238,10 @@ def train(
         print("Test set evaluated with last (not best) checkpoint!")
         evaluate(cfg, model, device, loss_fns, test_vars, test_dataloader, "test", stats, 0, 0, summary_writer,
                  visualization_dir, eval_l1_loss, eval_l1_loss_viewbox)
-        print("Train set evaluated with last (not best) checkpoint!")
-        evaluate(cfg, model, device, loss_fns, train_vars, train_dataloader, "train", stats, 0, 0, summary_writer,
-                 visualization_dir, eval_l1_loss, eval_l1_loss_viewbox)
+
+    print("Train set evaluated with last (not best) checkpoint!")
+    evaluate(cfg, model, device, loss_fns, train_vars, train_dataloader, "train", stats, 0, 0, summary_writer,
+             visualization_dir, eval_l1_loss, eval_l1_loss_viewbox)
 
 
 def evaluate(cfg, model, device, loss_fns, vars, dataloader, subset, stats, epoch, step, summary_writer,

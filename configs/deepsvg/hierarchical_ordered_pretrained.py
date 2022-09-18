@@ -18,7 +18,12 @@ class Config(Config):
 
         self.filter_category = None
 
-        self.learning_rate = 1e-3 * num_gpus
+        self.learning_rate = 1e-4 * num_gpus
         self.batch_size = 60 * num_gpus
 
+        self.val_every = 1000
         self.pretrained_path = "pretrained/hierarchical_ordered.pth.tar"
+
+    def make_schedulers(self, optimizers, epoch_size):
+        optimizer, = optimizers
+        return [lr_scheduler.StepLR(optimizer, step_size=2.5 * epoch_size, gamma=0.9)]

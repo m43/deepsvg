@@ -77,7 +77,7 @@ class Config(_Config):
 
     def set_train_vars(self, train_vars, dataloader):
         train_vars.x_inputs_train = [dataloader.dataset.get(idx, [*self.model_args, "tensor_grouped"])
-                                     for idx in random.sample(range(len(dataloader.dataset)), k=10)]
+                                     for idx in range(10)]
 
     def visualize(self, model, output, vars, step, epoch, summary_writer, visualization_dir, split="train"):
         device = next(model.parameters()).device
