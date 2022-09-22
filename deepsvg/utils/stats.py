@@ -124,7 +124,10 @@ class Stats:
             s = f"[{split.upper()}, epoch {self.epoch + 1}] "
 
         return s + ", ".join(
-            f"{stat}: {self.stats[split].get(stat).median():.4f}" for stat in self.stats_to_print[split])
+            f"{stat}: {self.stats[split].get(stat).median():.4f}"
+            for stat in self.stats_to_print[split]
+            if self.stats[split].get(stat) is not None
+        )
 
     def write_tensorboard(self, summary_writer, split, reset_buffers_after_write=True):
         print(f"Writing split={split} to tensorboard. reset_buffers={reset_buffers_after_write}. step={self.step}")

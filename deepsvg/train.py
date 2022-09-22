@@ -122,17 +122,18 @@ def train(
     if resume:
         ckpt_exists = utils.load_ckpt_list(checkpoint_dir, model, device, None, optimizers, scheduler_lrs,
                                            scheduler_warmups, stats, train_vars)
+        assert ckpt_exists, f"Could not resume from checkpoint_dir={checkpoint_dir}"
+
         # Hack to include the additional stats that were not saved in the checkpoint
         for split in cfg.stats_to_print.keys():
             if split not in stats.stats_to_print:
                 stats.stats[split] = defaultdict(MetricTracker)
                 stats.stats_to_print[split] = set()
-        if ckpt_exists:
-            print(f"Resuming model at epoch {stats.epoch + 1}")
-            stats.num_steps = cfg.num_epochs * len(train_dataloader)
-            stats.reset_stats_to_print()
-        else:
-            print(f"Could not resume from checkpoint_dir={checkpoint_dir}")
+
+        print(f"Resuming model at epoch {stats.epoch + 1}")
+        stats.num_steps = cfg.num_epochs * len(train_dataloader)
+        stats.reset_stats_to_print()
+
     else:
         # Run a single forward pass on the single-device model for initialization of some modules
         single_foward_dataloader = DataLoader(train_dataset, batch_size=cfg.batch_size // cfg.num_gpus, shuffle=True,
